@@ -55,31 +55,31 @@ function extractOrientation(exifBlock: Uint8Array, isBigEndian: boolean) {
       offset +
       NUM_DIRECTORY_ENTRIES_BYTES +
       directoryEntryNumber * IDF_ENTRY_BYTES
-    const end = start + IDF_ENTRY_BYTES
 
     // Skip on corrupt EXIF blocks
     if (start > exifBlock.length) {
       return
     }
 
-    const block = exifBlock.slice(start, end)
-    const tagNumber = readUInt(block, 16, 0, isBigEndian)
+    // Read the entry where it lies. Copying out each of the twelve byte
+    // entries meant an allocation per tag, and there can be thousands.
+    const tagNumber = readUInt(exifBlock, 16, start, isBigEndian)
 
     // 0x0112 (decimal: 274) is the `orientation` tag ID
     if (tagNumber === 274) {
-      const dataFormat = readUInt(block, 16, 2, isBigEndian)
+      const dataFormat = readUInt(exifBlock, 16, start + 2, isBigEndian)
       if (dataFormat !== 3) {
         return
       }
 
       // unsinged int has 2 bytes per component
       // if there would more than 4 bytes in total it's a pointer
-      const numberOfComponents = readUInt(block, 32, 4, isBigEndian)
+      const numberOfComponents = readUInt(exifBlock, 32, start + 4, isBigEndian)
       if (numberOfComponents !== 1) {
         return
       }
 
-      return readUInt(block, 16, 8, isBigEndian)
+      return readUInt(exifBlock, 16, start + 8, isBigEndian)
     }
   }
 }
@@ -89,8 +89,9 @@ function validateExifBlock(
   segment: number,
   segmentLength: number,
 ) {
-  // Skip APP1 Data Size
-  const exifBlock = input.slice(
+  // Skip APP1 Data Size. A view, since nothing here writes to it and the
+  // segment can run to 64KB.
+  const exifBlock = input.subarray(
     segment + APP1_DATA_SIZE_BYTES,
     segment + segmentLength,
   )
