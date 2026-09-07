@@ -361,18 +361,29 @@ describe('WebP', () => {
     expectTypeError(riff('VP8?', filler(10)), 'Invalid WebP')
   })
 
-  it('throws when a lossy chunk carries the lossless signature byte', () => {
+  it('throws when a lossy chunk is missing its start code', () => {
     const input = riff('VP8 ', Uint8Array.from([0x2f]), filler(9))
     expectTypeError(input, 'Invalid WebP')
   })
 
-  it('throws when a lossless chunk carries the lossy start code', () => {
+  it('throws when a lossless chunk is missing its signature byte', () => {
+    const input = riff('VP8L', Uint8Array.from([0x00]), filler(9))
+    expectTypeError(input, 'Invalid WebP')
+  })
+
+  it('reads a lossless chunk whose dimensions spell the lossy start code', () => {
+    // 9d 01 2a is only meaningful right after a VP8 frame tag. Here those
+    // bytes are packed dimension bits, and a signed VP8L stream is valid.
     const input = riff(
       'VP8L',
       Uint8Array.from([0x2f, 0x00, 0x00, 0x9d, 0x01, 0x2a]),
       filler(4),
     )
-    expectTypeError(input, 'Invalid WebP')
+    assert.deepEqual(imageSize(input), {
+      width: 1,
+      height: 1653,
+      type: 'webp',
+    })
   })
 })
 

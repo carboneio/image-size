@@ -255,6 +255,41 @@ describe('JPEG segment scanning', () => {
   })
 })
 
+describe('WebP stream signatures', () => {
+  // The chunk payload starts at offset 20, which is what the parser reads
+  const webp = (fourCC: string, ...payload: number[]) =>
+    concat(
+      ascii('RIFF'),
+      u32le(0),
+      ascii('WEBP'),
+      ascii(fourCC),
+      u32le(payload.length),
+      payload,
+      new Uint8Array(10),
+    )
+
+  it('does not size a lossy stream that carries no start code', () => {
+    // A VP8 frame must be followed by the 9d 01 2a start code. Without it,
+    // the bytes where the dimensions should be mean nothing, and reading them
+    // anyway fabricated a 320x240 that no amount of output validation catches.
+    const input = webp('VP8 ', 0, 0, 0, 0xaa, 0xbb, 0xcc, 0x40, 0x01, 0xf0, 0)
+    assert.throws(() => imageSize(input), {
+      name: 'TypeError',
+      message: 'Invalid WebP',
+    })
+  })
+
+  it('does not size a lossless stream that carries no signature byte', () => {
+    // A VP8L stream opens with 0x2f. Without it, the packed dimension bits
+    // are not dimension bits, and reading them fabricated a 321x177.
+    const input = webp('VP8L', 0x99, 0x40, 0x01, 0x2c, 0x50, 0)
+    assert.throws(() => imageSize(input), {
+      name: 'TypeError',
+      message: 'Invalid WebP',
+    })
+  })
+})
+
 describe('PNM header scanning', () => {
   it('scans a hostile header in linear time', () => {
     // A signature followed by nothing but comment lines. The dimension line

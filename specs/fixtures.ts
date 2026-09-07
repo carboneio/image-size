@@ -391,7 +391,6 @@ const webpLossless: Builder = ({ width, height, payload }) => {
       ((storedWidth >>> 8) & 0x3f) | ((storedHeight & 0x03) << 6),
       (storedHeight >>> 2) & 0xff,
       (storedHeight >>> 10) & 0x0f,
-      // Keeps the bytes at offset 3..6 from ever spelling the lossy start code
       0x00,
     ],
     filler(payload),
