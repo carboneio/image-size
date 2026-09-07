@@ -51,6 +51,7 @@
     "format": "biome format --write lib specs",
     "test": "TS_NODE_PROJECT=tsconfig.test.json c8 --reporter=text --reporter=lcov node --require ts-node/register --test --test-reporter=dot specs/*.spec.ts",
     "test:watch": "TS_NODE_PROJECT=tsconfig.test.json node --require ts-node/register --test --watch specs/*.spec.ts",
+    "bench": "TS_NODE_PROJECT=tsconfig.test.json node --require ts-node/register specs/benchmark.ts",
     "clean": "rm -rf dist docs",
     "generate-docs": "typedoc",
     "build": "tsup",
@@ -97,8 +98,14 @@
     "typedoc": "0.25.13",
     "typescript": "5.4.5"
   },
-  "nyc": {
-    "include": "lib",
-    "exclude": "specs/*.spec.ts"
+  "c8": {
+    "include": [
+      "lib/**/*.ts"
+    ],
+    "check-coverage": true,
+    "statements": 100,
+    "branches": 100,
+    "functions": 100,
+    "lines": 100
   }
 }

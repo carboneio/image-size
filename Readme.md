@@ -197,6 +197,16 @@ console.log(width, height, orientation)
    - Some formats (like TIFF) require the full header in buffer
    - Streaming partial buffers may not work for all formats
 
+## Development
+
+```bash
+yarn test    # unit tests, with a 100% coverage threshold
+yarn bench   # detection throughput, per format, on small and large files
+```
+
+`yarn bench` accepts `--filter=<substring>` to benchmark a single format, e.g.
+`yarn bench --filter=webp`.
+
 ## License
 
 MIT

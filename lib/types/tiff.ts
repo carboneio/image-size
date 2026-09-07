@@ -61,6 +61,8 @@ function readTagValue(
       }
       return value
     }
+    // Unreachable: `extractTags` filters out every other type before calling
+    /* c8 ignore next 2 */
     default:
       return 0
   }
