@@ -131,6 +131,18 @@ The across-the-board gain on small files comes from `toUTF8String` and
 `toHexString`, which copied the byte range before reading it once. Every
 format's `validate` goes through one of the two.
 
+Two more copies are gone that the benchmark's fixtures do not exercise, since
+neither shape appears in them:
+
+| Payload                          |  Before |   After | Factor |
+| -------------------------------- | ------: | ------: | -----: |
+| JXL container, 32 MB codestream  | 2.25 ms | 0.01 ms |   250x |
+| JPEG APP1 EXIF, 5000 IFD entries | 1.22 ms | 0.34 ms |   3.6x |
+
+The JXL container was copied whole so that nine bytes of header could be read
+from its start. The EXIF walk copied the APP1 segment, up to 64 KB, and then
+each twelve byte entry out of that copy.
+
 ### Fixed
 
 - A HEIF cropped inside a box that declares more bytes than survived is read
@@ -154,6 +166,11 @@ format's `validate` goes through one of the two.
   ignored the `bytesRead` it was given, so a partial read on a network or FUSE
   filesystem left the rest of the buffer at zero and the parsers were handed
   bytes that were never in the file — a wrong answer where an error was due.
+- `imageSizeFromFile` now honours its concurrency limit. Every call drained the
+  queue itself and nothing counted the jobs already running, so each caller
+  started its own batch and the cap of 100 never engaged. Sizing 500 files at
+  once held 500 descriptors open; it now peaks at 100, in the same time. This
+  is the `EMFILE` the queue exists to prevent.
 - A clean aperture (`clap`) now crops the image property it follows. The old
   scan could apply the first `clap` of a file to every image before it.
 - `tiff.ts` imported `node:fs` without using it, dragging a Node builtin into
