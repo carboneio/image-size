@@ -180,6 +180,37 @@ describe('CVE-2025-71329, HEIF property box of size zero', () => {
   })
 })
 
+describe('CVE-2025-71329, JXL container box of size zero', () => {
+  // https://github.com/advisories/GHSA-5p2g-fcmc-qvqq
+  const header = concat(
+    u32be(12),
+    ascii('JXL '),
+    [0x0d, 0x0a, 0x87, 0x0a],
+    box('ftyp', ascii('jxl '), u32be(0), ascii('jxl ')),
+  )
+
+  it('does not spin on a jxlp box whose size field is zero', () => {
+    const zeroSized = concat(u32be(0), ascii('jxlp'), new Uint8Array(32))
+    const { killed } = imageSizeIsolated(concat(header, zeroSized))
+    assert.equal(killed, false, 'imageSize never returned, the input hangs it')
+  })
+
+  it('rejects an empty codestream with a TypeError', () => {
+    assert.throws(() => imageSize(concat(header, box('jxlc'))), {
+      name: 'TypeError',
+      message: 'No codestream found in JXL container',
+    })
+  })
+
+  it('rejects partial codestreams that carry no bytes', () => {
+    const emptyPartial = concat(u32be(8), ascii('jxlp'))
+    assert.throws(() => imageSize(concat(header, emptyPartial)), {
+      name: 'TypeError',
+      message: 'No codestream found in JXL container',
+    })
+  })
+})
+
 describe('ISO base media box geometry', () => {
   const ftyp = box('ftyp', ascii('heic'), u32be(0))
   // The `meta` payload: a full-box version/flags word, then the property tree

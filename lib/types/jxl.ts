@@ -68,7 +68,9 @@ export const JXL: IImage = {
 
   calculate(input: Uint8Array): ISize {
     const codestream = extractCodestream(input)
-    if (codestream) return JXLStream.calculate(codestream)
-    throw new Error('No codestream found in JXL container')
+    // An empty codestream is as useless as a missing one, and letting it
+    // through only pushes the failure down into the bit reader
+    if (codestream?.length) return JXLStream.calculate(codestream)
+    throw new TypeError('No codestream found in JXL container')
   },
 }
