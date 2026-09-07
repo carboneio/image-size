@@ -2,9 +2,6 @@
 
 All notable changes to this project are documented in this file.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
 ## [3.0.0] - 2026-09-07
 
 A security release. Three published denial-of-service advisories are closed,
@@ -23,7 +20,7 @@ touched. The proofs live in `specs/security.spec.ts`.
 
 ### Security
 
-- **Out-of-bounds read (not previously reported).** `getView` built its
+- **Out-of-bounds read.** `getView` built its
   `DataView` without a length, so it spanned the rest of the underlying
   `ArrayBuffer` instead of the `Uint8Array` it was handed. Any parser reading
   past the end of a short input returned adjacent memory. Because Node
@@ -46,21 +43,21 @@ touched. The proofs live in `specs/security.spec.ts`.
   now read as the ISO base media file format defines them, where zero means the
   box runs to the end of the file, so the cursor always advances.
 
-- **Quadratic JPEG scanning (not previously reported).** Realigning after a bad
+- **Quadratic JPEG scanning.** Realigning after a bad
   segment length copied the whole remaining buffer for every byte skipped.
   512KB of bytes that never spell a marker blocked the event loop for 10.8
   seconds. `imageSizeFromFile` hands the parsers exactly 512KB, so any file that
   size reached this path.
 
-- **Quadratic HEIF property scanning (not previously reported).** The property
+- **Quadratic HEIF property scanning.** The property
   walk searched the whole file for the next `ispe` and again for the next
   `clap` on every turn. 4000 properties, in 78KB, cost 4.1 seconds.
 
-- **Quadratic TIFF tag scanning (not previously reported).** Every twelve byte
+- **Quadratic TIFF tag scanning.** Every twelve byte
   tag entry resliced the rest of the buffer. 512KB of tags that never terminate
   cost 0.9 seconds.
 
-- **Unbounded ICO entry count (not previously reported).** The number of icons
+- **Unbounded ICO entry count.** The number of icons
   came straight from the file header and was never checked against the buffer.
   A 22 byte header announcing 65535 icons produced 65535 entries whose width
   and height were `undefined`.
@@ -144,6 +141,5 @@ window is deliberately left alone here: it is a detection question rather than
 a safety one, and it belongs with the scanner rewrite proposed in
 [#448](https://codeberg.org/image-size/image-size/pulls/448).
 
-[3.0.0]: https://codeberg.org/image-size/image-size/compare/v2.0.2...v3.0.0
 [CVE-2025-71330]: https://github.com/advisories/GHSA-w3rx-r6r6-pgpr
 [CVE-2025-71329]: https://github.com/advisories/GHSA-5p2g-fcmc-qvqq
