@@ -211,6 +211,40 @@ describe('CVE-2025-71329, JXL container box of size zero', () => {
   })
 })
 
+describe('JPEG segment scanning', () => {
+  it('scans a hostile file in linear time', () => {
+    // Bytes that never spell a marker force the parser to realign one byte at
+    // a time. 512KB is exactly what imageSizeFromFile hands to the parsers.
+    const input = new Uint8Array(512 * 1024)
+    input.set([0xff, 0xd8], 0)
+
+    let thrown: unknown
+    const ms = elapsed(() => {
+      try {
+        imageSize(input)
+      } catch (err) {
+        thrown = err
+      }
+    })
+
+    assert.ok(ms < 100, `scanning 512KB took ${ms.toFixed(0)}ms`)
+    assert.ok(thrown instanceof TypeError, `threw ${thrown}`)
+  })
+
+  it('reads a file that opens straight on its frame header', () => {
+    // FF D8 FF C0: a baseline frame with no segment in front of it
+    const input = Uint8Array.from([
+      0xff, 0xd8, 0xff, 0xc0, 0x00, 0x11, 0x08, 0x01, 0xc8, 0x00, 0x7b, 0x03,
+      0x01, 0x11, 0x00, 0x02, 0x11, 0x01, 0x03, 0x11, 0x01, 0xff, 0xd9,
+    ])
+    assert.deepEqual(imageSize(input), {
+      width: 123,
+      height: 456,
+      type: 'jpg',
+    })
+  })
+})
+
 describe('ISO base media box geometry', () => {
   const ftyp = box('ftyp', ascii('heic'), u32be(0))
   // The `meta` payload: a full-box version/flags word, then the property tree

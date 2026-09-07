@@ -17,8 +17,12 @@ const LITTLE_ENDIAN_BYTE_ALIGN = '4949'
 const IDF_ENTRY_BYTES = 12
 const NUM_DIRECTORY_ENTRIES_BYTES = 2
 
-function isEXIF(input: Uint8Array): boolean {
-  return toHexString(input, 2, 6) === EXIF_MARKER
+// 0xFFC0 is baseline standard (SOF), 0xFFC1 baseline optimized (SOF),
+// 0xFFC2 progressive (SOF2)
+const SOF_MARKERS = new Set([0xc0, 0xc1, 0xc2])
+
+function isEXIF(input: Uint8Array, segment: number): boolean {
+  return toHexString(input, segment + 2, segment + 6) === EXIF_MARKER
 }
 
 function extractSize(input: Uint8Array, index: number): ISize {
@@ -80,9 +84,16 @@ function extractOrientation(exifBlock: Uint8Array, isBigEndian: boolean) {
   }
 }
 
-function validateExifBlock(input: Uint8Array, index: number) {
+function validateExifBlock(
+  input: Uint8Array,
+  segment: number,
+  segmentLength: number,
+) {
   // Skip APP1 Data Size
-  const exifBlock = input.slice(APP1_DATA_SIZE_BYTES, index)
+  const exifBlock = input.slice(
+    segment + APP1_DATA_SIZE_BYTES,
+    segment + segmentLength,
+  )
 
   // Consider byte alignment
   const byteAlign = toHexString(
@@ -100,45 +111,41 @@ function validateExifBlock(input: Uint8Array, index: number) {
   }
 }
 
-function validateInput(input: Uint8Array, index: number): void {
-  // index should be within buffer limits
-  if (index > input.length) {
-    throw new TypeError('Corrupt JPG, exceeded buffer limits')
-  }
-}
-
 export const JPG: IImage = {
   validate: (input) => toHexString(input, 0, 2) === 'ffd8',
 
-  calculate(_input) {
-    // Skip 4 chars, they are for signature
-    let input = _input.slice(4)
+  calculate(input) {
+    // A baseline JPEG may open straight on its frame header, with no segment
+    // in front of it: signature, marker, length, precision, then the size
+    if (SOF_MARKERS.has(input[3])) return extractSize(input, 7)
 
     let orientation: number | undefined
-    let next: number
-    while (input.length) {
-      // read length of the next block
-      const i = readUInt16BE(input, 0)
+    // Index of the two byte length field of the segment being examined. The
+    // whole scan works on indices: slicing the remainder on every step made
+    // the cost quadratic, and a 512KB file blocked the event loop for 15s.
+    let segment = 4
 
-      // ensure correct format
-      validateInput(input, i)
+    while (segment + APP1_DATA_SIZE_BYTES <= input.length) {
+      const segmentLength = readUInt16BE(input, segment)
+      // Where the marker of the following segment should be
+      const nextMarker = segment + segmentLength
+
+      if (nextMarker > input.length) {
+        throw new TypeError('Corrupt JPG, exceeded buffer limits')
+      }
 
       // Every JPEG block must begin with a 0xFF
-      if (input[i] !== 0xff) {
-        input = input.slice(1)
+      if (input[nextMarker] !== 0xff) {
+        segment += 1
         continue
       }
 
-      if (isEXIF(input)) {
-        orientation = validateExifBlock(input, i)
+      if (isEXIF(input, segment)) {
+        orientation = validateExifBlock(input, segment, segmentLength)
       }
 
-      // 0xFFC0 is baseline standard(SOF)
-      // 0xFFC1 is baseline optimized(SOF)
-      // 0xFFC2 is progressive(SOF2)
-      next = input[i + 1]
-      if (next === 0xc0 || next === 0xc1 || next === 0xc2) {
-        const size = extractSize(input, i + 5)
+      if (SOF_MARKERS.has(input[nextMarker + 1])) {
+        const size = extractSize(input, nextMarker + 5)
 
         // TODO: is orientation=0 a valid answer here?
         if (!orientation) {
@@ -153,7 +160,7 @@ export const JPG: IImage = {
       }
 
       // move to the next block
-      input = input.slice(i + 2)
+      segment = nextMarker + 2
     }
 
     throw new TypeError('Invalid JPG, no size found')
