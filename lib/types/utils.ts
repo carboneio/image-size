@@ -10,38 +10,45 @@ export const toHexString = (input: Uint8Array, start = 0, end = input.length) =>
     .slice(start, end)
     .reduce((memo, i) => memo + `0${i.toString(16)}`.slice(-2), '')
 
-const getView = (input: Uint8Array, offset: number) =>
-  new DataView(input.buffer, input.byteOffset + offset)
+// A DataView built without an explicit length spans the rest of the underlying
+// ArrayBuffer, which for a pooled Node Buffer is somebody else's data. Passing
+// the length keeps every read inside the slice the caller actually handed over.
+const getView = (input: Uint8Array, offset: number, size: number) => {
+  if (offset < 0 || offset + size > input.byteLength) {
+    throw new TypeError('Truncated input, cannot read past the end of the data')
+  }
+  return new DataView(input.buffer, input.byteOffset + offset, size)
+}
 
 export const readInt16LE = (input: Uint8Array, offset = 0) =>
-  getView(input, offset).getInt16(0, true)
+  getView(input, offset, 2).getInt16(0, true)
 
 export const readUInt16BE = (input: Uint8Array, offset = 0) =>
-  getView(input, offset).getUint16(0, false)
+  getView(input, offset, 2).getUint16(0, false)
 
 export const readUInt16LE = (input: Uint8Array, offset = 0) =>
-  getView(input, offset).getUint16(0, true)
+  getView(input, offset, 2).getUint16(0, true)
 
 // DataView doesn't have 24-bit methods
 export const readUInt24LE = (input: Uint8Array, offset = 0) => {
-  const view = getView(input, offset)
+  const view = getView(input, offset, 3)
   return view.getUint16(0, true) + (view.getUint8(2) << 16)
 }
 
 export const readInt32LE = (input: Uint8Array, offset = 0) =>
-  getView(input, offset).getInt32(0, true)
+  getView(input, offset, 4).getInt32(0, true)
 
 export const readUInt32BE = (input: Uint8Array, offset = 0) =>
-  getView(input, offset).getUint32(0, false)
+  getView(input, offset, 4).getUint32(0, false)
 
 export const readUInt32LE = (input: Uint8Array, offset = 0) =>
-  getView(input, offset).getUint32(0, true)
+  getView(input, offset, 4).getUint32(0, true)
 
 export const readUInt64 = (
   input: Uint8Array,
   offset: number,
   isBigEndian: boolean,
-): bigint => getView(input, offset).getBigUint64(0, !isBigEndian)
+): bigint => getView(input, offset, 8).getBigUint64(0, !isBigEndian)
 
 // Abstract reading multi-byte unsigned integers
 const methods = {

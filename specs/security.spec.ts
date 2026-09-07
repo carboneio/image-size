@@ -1,7 +1,8 @@
 import * as assert from 'node:assert'
 import { describe, it } from 'node:test'
 
-import { buildFixture } from './fixtures'
+import { imageSize } from '../lib'
+import { ascii, buildFixture } from './fixtures'
 import { imageSizeIsolated } from './helpers/isolate'
 
 /**
@@ -19,5 +20,24 @@ describe('the isolated harness itself', () => {
     assert.deepEqual(result.outcome, {
       returned: { width: 8, height: 8, type: 'png' },
     })
+  })
+})
+
+describe('reads stay inside the input view', () => {
+  it('does not leak bytes of the surrounding ArrayBuffer', () => {
+    // Node allocates small Buffers out of a shared 8KB pool, so the bytes
+    // sitting next to a view routinely belong to somebody else's data.
+    const pool = new Uint8Array(4096).fill(0x41)
+    pool.set(ascii('8BPS'), 0)
+    // The caller only hands over the 8 bytes of the signature
+    const input = new Uint8Array(pool.buffer, 0, 8)
+
+    assert.throws(() => imageSize(input), TypeError)
+  })
+
+  it('rejects a truncated input with a TypeError, not a RangeError', () => {
+    for (const signature of [[0x00], [0x38], [0x42], [0x44, 0x44]]) {
+      assert.throws(() => imageSize(Uint8Array.from(signature)), TypeError)
+    }
   })
 })
