@@ -2,7 +2,15 @@ import * as assert from 'node:assert'
 import { describe, it } from 'node:test'
 
 import { imageSize } from '../lib'
-import { ascii, box, buildFixture, concat, u32be, u64be } from './fixtures'
+import {
+  ascii,
+  box,
+  buildFixture,
+  concat,
+  filler,
+  u32be,
+  u64be,
+} from './fixtures'
 import { imageSizeIsolated } from './helpers/isolate'
 
 /**
@@ -11,6 +19,22 @@ import { imageSizeIsolated } from './helpers/isolate'
  * Every case here goes through `imageSize` only, never through an individual
  * parser, so that a passing test really means a caller of the library is safe.
  */
+
+/**
+ * Asserts out of process that a hostile payload is rejected.
+ *
+ * Both halves have to be checked from the same isolated run: asserting the
+ * TypeError in-process would hang the runner for as long as the bug is there,
+ * which is precisely what these payloads exploit.
+ */
+const expectIsolatedRejection = (payload: Uint8Array) => {
+  const { killed, outcome } = imageSizeIsolated(payload)
+  assert.equal(killed, false, 'imageSize never returned, the input hangs it')
+  if (!outcome || !('threw' in outcome)) {
+    assert.fail(`expected a rejection, got ${JSON.stringify(outcome)}`)
+  }
+  assert.equal(outcome.threw.name, 'TypeError')
+}
 
 describe('the isolated harness itself', () => {
   it('reports a well-formed image as terminating on its own', () => {
@@ -39,6 +63,36 @@ describe('reads stay inside the input view', () => {
     for (const signature of [[0x00], [0x38], [0x42], [0x44, 0x44]]) {
       assert.throws(() => imageSize(Uint8Array.from(signature)), TypeError)
     }
+  })
+})
+
+describe('CVE-2025-71330, ICNS entry of length zero', () => {
+  // https://github.com/advisories/GHSA-w3rx-r6r6-pgpr
+  const icns = concat(
+    ascii('icns'),
+    u32be(64),
+    ascii('ICON'),
+    u32be(0),
+    new Uint8Array(48),
+  )
+
+  it('rejects an entry that never advances instead of spinning', () => {
+    expectIsolatedRejection(icns)
+  })
+
+  it('skips icon types it does not know rather than sizing them undefined', () => {
+    const entry = (type: string) => concat(ascii(type), u32be(16), filler(8))
+    const input = concat(
+      ascii('icns'),
+      u32be(8 + 16 + 16),
+      entry('zzzz'),
+      entry('ic09'),
+    )
+    assert.deepEqual(imageSize(input), {
+      width: 512,
+      height: 512,
+      type: 'icns',
+    })
   })
 })
 

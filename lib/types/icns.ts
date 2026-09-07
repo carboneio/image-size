@@ -22,6 +22,9 @@ const FILE_LENGTH_OFFSET = 4 // MSB => BIG ENDIAN
  */
 const ENTRY_LENGTH_OFFSET = 4 // MSB => BIG ENDIAN
 
+// An entry always carries at least its own type and length fields
+const ENTRY_HEADER_SIZE = 4 + 4 // 8
+
 const ICON_TYPE_SIZE: Record<string, number> = {
   ICON: 32,
   'ICN#': 32,
@@ -76,9 +79,9 @@ function readImageHeader(
   ]
 }
 
-function getImageSize(type: string): ISize {
+function getImageSize(type: string): ISize | undefined {
   const size = ICON_TYPE_SIZE[type]
-  return { width: size, height: size, type }
+  if (size) return { width: size, height: size, type }
 }
 
 export const ICNS: IImage = {
@@ -91,11 +94,19 @@ export const ICNS: IImage = {
 
     const images: ISize[] = []
 
-    while (imageOffset < fileLength && imageOffset < inputLength) {
-      const imageHeader = readImageHeader(input, imageOffset)
-      const imageSize = getImageSize(imageHeader[0])
-      images.push(imageSize)
-      imageOffset += imageHeader[1]
+    while (
+      imageOffset < fileLength &&
+      imageOffset + ENTRY_HEADER_SIZE <= inputLength
+    ) {
+      const [type, entryLength] = readImageHeader(input, imageOffset)
+
+      // An entry shorter than its own header cannot move the cursor forward,
+      // and a file full of them would spin the parser for ever
+      if (entryLength < ENTRY_HEADER_SIZE) break
+
+      const imageSize = getImageSize(type)
+      if (imageSize) images.push(imageSize)
+      imageOffset += entryLength
     }
 
     if (images.length === 0) {
