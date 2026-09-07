@@ -3,11 +3,12 @@ export const toUTF8String = (
   input: Uint8Array,
   start = 0,
   end = input.length,
-) => decoder.decode(input.slice(start, end))
+  // A view is enough to read from, where slice would copy the range first
+) => decoder.decode(input.subarray(start, end))
 
 export const toHexString = (input: Uint8Array, start = 0, end = input.length) =>
   input
-    .slice(start, end)
+    .subarray(start, end)
     .reduce((memo, i) => memo + `0${i.toString(16)}`.slice(-2), '')
 
 // A DataView built without an explicit length spans the rest of the underlying
