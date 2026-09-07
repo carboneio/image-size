@@ -263,8 +263,23 @@ describe('PNM', () => {
     expectTypeError(ascii('P1\n# a comment and nothing else\n'), 'Invalid PNM')
   })
 
+  it('gives up on the first line that is not a pair of dimensions', () => {
+    // Rather than keep reading, which on a large file would mean walking all
+    // of the pixel data in search of a header that is not there
+    expectTypeError(ascii('P6\nnotadimension\n255\n'), 'Invalid PNM')
+  })
+
   it('throws when a PAM header declares neither width nor height', () => {
     expectTypeError(ascii('P7\nDEPTH 3\nENDHDR\n'), 'Invalid PAM')
+  })
+
+  it('reads a PAM header across a blank line', () => {
+    const input = ascii('P7\nWIDTH 100\n\nHEIGHT 50\nENDHDR\n')
+    assert.deepEqual(imageSize(input), {
+      width: 100,
+      height: 50,
+      type: 'pnm',
+    })
   })
 })
 

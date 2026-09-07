@@ -13,33 +13,60 @@ const PNMTypes = {
 } as const
 
 type ValidSignature = keyof typeof PNMTypes
-type Handler = (type: string[]) => ISize
+type Handler = (lines: Iterable<string>) => ISize
+
+const LINE_FEED = 0x0a
+const CARRIAGE_RETURN = 0x0d
+
+const isLineBreak = (byte: number) =>
+  byte === LINE_FEED || byte === CARRIAGE_RETURN
+
+/**
+ * Yields the lines of `input` from `start`, decoding them one at a time.
+ *
+ * Decoding the whole file up front and splitting it into an array made the
+ * cost grow with the pixel data rather than with the header, and consuming
+ * that array with `shift()` recopied it on every line.
+ */
+function* readLines(input: Uint8Array, start: number): Generator<string> {
+  let lineStart = start
+  while (lineStart < input.length) {
+    let lineEnd = lineStart
+    while (lineEnd < input.length && !isLineBreak(input[lineEnd])) {
+      lineEnd += 1
+    }
+
+    yield toUTF8String(input, lineStart, lineEnd)
+
+    // Skip the whole run of line breaks, so that an empty line is not
+    // reported once per byte of separator
+    lineStart = lineEnd + 1
+    while (lineStart < input.length && isLineBreak(input[lineStart])) {
+      lineStart += 1
+    }
+  }
+}
 
 const handlers: Record<string, Handler> = {
   default: (lines) => {
-    let dimensions: string[] = []
-
-    while (lines.length > 0) {
-      const line = lines.shift() as string
+    for (const line of lines) {
       if (line[0] === '#') {
         continue
       }
-      dimensions = line.split(' ')
-      break
-    }
-
-    if (dimensions.length === 2) {
-      return {
-        height: Number.parseInt(dimensions[1], 10),
-        width: Number.parseInt(dimensions[0], 10),
+      const dimensions = line.split(' ')
+      if (dimensions.length === 2) {
+        return {
+          height: Number.parseInt(dimensions[1], 10),
+          width: Number.parseInt(dimensions[0], 10),
+        }
       }
+      break
     }
     throw new TypeError('Invalid PNM')
   },
   pam: (lines) => {
     const size: Record<string, number> = {}
-    while (lines.length > 0) {
-      const line = lines.shift() as string
+    for (const line of lines) {
       if (line.length > 16 || line.charCodeAt(0) > 128) {
         continue
       }
@@ -68,9 +95,8 @@ export const PNM: IImage = {
   calculate(input) {
     const signature = toUTF8String(input, 0, 2) as ValidSignature
     const type = PNMTypes[signature]
-    // TODO: this probably generates garbage. move to a stream based parser
-    const lines = toUTF8String(input, 3).split(/[\r\n]+/)
     const handler = handlers[type] || handlers.default
-    return handler(lines)
+    // The signature is followed by a single separator byte
+    return handler(readLines(input, 3))
   },
 }

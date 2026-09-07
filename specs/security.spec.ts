@@ -255,6 +255,49 @@ describe('JPEG segment scanning', () => {
   })
 })
 
+describe('PNM header scanning', () => {
+  it('scans a hostile header in linear time', () => {
+    // A signature followed by nothing but comment lines. The dimension line
+    // never comes, so every line of the file has to be looked at.
+    const input = ascii(`P6\n${'#c\n'.repeat(170 * 1024)}`)
+
+    let thrown: unknown
+    const ms = elapsed(() => {
+      try {
+        imageSize(input)
+      } catch (err) {
+        thrown = err
+      }
+    })
+
+    assert.ok(
+      ms < 100,
+      `scanning ${input.length} bytes took ${ms.toFixed(0)}ms`,
+    )
+    assert.ok(thrown instanceof TypeError, `threw ${thrown}`)
+  })
+
+  it('reads the header without walking the pixels behind it', () => {
+    // The dimensions sit in the first two lines; the megabytes of pixel data
+    // after them must not be paid for.
+    const header = ascii('P6\n800 600\n255\n')
+    const small = concat(header, new Uint8Array(64 * 1024))
+    const large = concat(header, new Uint8Array(4 * 1024 * 1024))
+    const expected = { width: 800, height: 600, type: 'pnm' }
+
+    assert.deepEqual(imageSize(small), expected)
+    assert.deepEqual(imageSize(large), expected)
+
+    // Warm both paths before timing, so this compares work and not JIT state
+    const measure = (input: Uint8Array) =>
+      Math.min(
+        ...Array.from({ length: 5 }, () => elapsed(() => imageSize(input))),
+      )
+    const ratio = (measure(large) + 0.001) / (measure(small) + 0.001)
+    assert.ok(ratio < 8, `a 64x larger file cost ${ratio.toFixed(1)}x as much`)
+  })
+})
+
 describe('TIFF tag scanning', () => {
   it('scans a hostile file in linear time', () => {
     // A valid header followed by bytes that never terminate the tag list
