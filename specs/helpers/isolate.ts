@@ -27,12 +27,18 @@ export interface IsolatedResult {
 /**
  * Runs `imageSize(payload)` in a child process that is killed after `timeout`.
  *
- * Costs roughly 600ms of `ts-node` startup, so it is reserved for the payloads
- * that would otherwise hang the test runner.
+ * Costs a `ts-node` startup, so it is reserved for the payloads that would
+ * otherwise hang the test runner.
+ *
+ * The timeout detects a hang, it is not a budget for how long the work may
+ * take. A loop that never ends never ends, so a generous value costs nothing:
+ * `spawnSync` returns as soon as the child exits. Too tight a value, on the
+ * other hand, reports slow start-up as a hang, which is what a two second
+ * budget did on CI runners.
  */
 export function imageSizeIsolated(
   payload: Uint8Array,
-  timeout = 2000,
+  timeout = 30_000,
 ): IsolatedResult {
   const source = `
     const { imageSize } = require(${JSON.stringify(libEntry)})
@@ -53,7 +59,14 @@ export function imageSizeIsolated(
       timeout,
       killSignal: 'SIGKILL',
       encoding: 'utf8',
-      env: { ...process.env, TS_NODE_PROJECT: tsConfig },
+      env: {
+        ...process.env,
+        TS_NODE_PROJECT: tsConfig,
+        // The child only has to run the library. Type checking it again, and
+        // every spec file the test config pulls in with it, more than doubles
+        // the start-up this timeout has to accommodate.
+        TS_NODE_TRANSPILE_ONLY: '1',
+      },
     },
   )
 
