@@ -13,7 +13,7 @@ import {
   u32le,
   u64be,
 } from './fixtures'
-import { elapsed, imageSizeIsolated } from './helpers/isolate'
+import { cpuMillis, elapsed, imageSizeIsolated } from './helpers/isolate'
 
 /**
  * Proofs that hostile inputs cannot hang, crash or leak through the public API.
@@ -36,6 +36,39 @@ const expectIsolatedRejection = (payload: Uint8Array) => {
     assert.fail(`expected a rejection, got ${JSON.stringify(outcome)}`)
   }
   assert.equal(outcome.threw.name, 'TypeError')
+}
+
+/**
+ * Big enough that the smaller of the two scans below still takes long enough
+ * to measure, since `process.cpuUsage` can be tick-based. A quarter of it is
+ * the 512KB that `imageSizeFromFile` hands to the parsers.
+ */
+const SCAN_BYTES = 2 * 1024 * 1024
+
+/**
+ * Asserts that a scan costs no more than a multiple of what a quarter of the
+ * same input costs.
+ *
+ * These tests used to assert a wall-clock budget, which measures the machine
+ * as much as the code: the 512KB that JPEG scans in 17ms here took 108ms on a
+ * loaded CI runner. Comparing two sizes cancels the machine out.
+ *
+ * On a 4x input, linear work lands on 4, and stayed under 5.4 with twice as
+ * many busy processes as cores, while the quadratic scans this guards against
+ * measure 13.
+ */
+const expectLinearScan = (build: (bytes: number) => Uint8Array) => {
+  // The best of a few runs, to compare work rather than scheduler luck
+  const measure = (input: Uint8Array) =>
+    Math.min(
+      ...Array.from({ length: 3 }, () => cpuMillis(() => imageSize(input))),
+    )
+
+  const quarter = measure(build(SCAN_BYTES / 4))
+  const whole = measure(build(SCAN_BYTES))
+  const ratio = (whole + 0.001) / (quarter + 0.001)
+
+  assert.ok(ratio < 8, `a 4x larger input cost ${ratio.toFixed(1)}x as much`)
 }
 
 describe('the isolated harness itself', () => {
@@ -126,6 +159,14 @@ describe('CVE-2025-71329, HEIF property box of size zero', () => {
   it('walks a long property list in linear time', () => {
     const ispe = box('ispe', u32be(0), u32be(64), u32be(64))
     const input = heifWith(...Array.from({ length: 4000 }, () => ispe))
+
+    // Every property has to parse, or the walk would be timed doing nothing
+    const { width, height } = imageSize(input)
+    assert.deepEqual({ width, height }, { width: 64, height: 64 })
+
+    // This walk costs under a millisecond, so unlike the byte scans below it
+    // is too short to compare against a smaller one: the budget is what fits.
+    // A quadratic walk of 4000 properties is nowhere near it.
     const ms = elapsed(() => imageSize(input))
     assert.ok(ms < 250, `parsing 4000 properties took ${ms.toFixed(0)}ms`)
   })
@@ -244,21 +285,15 @@ describe('CVE-2025-71329, JXL container box of size zero', () => {
 describe('JPEG segment scanning', () => {
   it('scans a hostile file in linear time', () => {
     // Bytes that never spell a marker force the parser to realign one byte at
-    // a time. 512KB is exactly what imageSizeFromFile hands to the parsers.
-    const input = new Uint8Array(512 * 1024)
-    input.set([0xff, 0xd8], 0)
+    // a time
+    const build = (bytes: number) => {
+      const input = new Uint8Array(bytes)
+      input.set([0xff, 0xd8], 0)
+      return input
+    }
 
-    let thrown: unknown
-    const ms = elapsed(() => {
-      try {
-        imageSize(input)
-      } catch (err) {
-        thrown = err
-      }
-    })
-
-    assert.ok(ms < 100, `scanning 512KB took ${ms.toFixed(0)}ms`)
-    assert.ok(thrown instanceof TypeError, `threw ${thrown}`)
+    assert.throws(() => imageSize(build(SCAN_BYTES)), { name: 'TypeError' })
+    expectLinearScan(build)
   })
 
   it('reads a file that opens straight on its frame header', () => {
@@ -314,22 +349,10 @@ describe('PNM header scanning', () => {
   it('scans a hostile header in linear time', () => {
     // A signature followed by nothing but comment lines. The dimension line
     // never comes, so every line of the file has to be looked at.
-    const input = ascii(`P6\n${'#c\n'.repeat(170 * 1024)}`)
+    const build = (bytes: number) => ascii(`P6\n${'#c\n'.repeat(bytes / 3)}`)
 
-    let thrown: unknown
-    const ms = elapsed(() => {
-      try {
-        imageSize(input)
-      } catch (err) {
-        thrown = err
-      }
-    })
-
-    assert.ok(
-      ms < 100,
-      `scanning ${input.length} bytes took ${ms.toFixed(0)}ms`,
-    )
-    assert.ok(thrown instanceof TypeError, `threw ${thrown}`)
+    assert.throws(() => imageSize(build(SCAN_BYTES)), { name: 'TypeError' })
+    expectLinearScan(build)
   })
 
   it('reads the header without walking the pixels behind it', () => {
@@ -356,20 +379,14 @@ describe('PNM header scanning', () => {
 describe('TIFF tag scanning', () => {
   it('scans a hostile file in linear time', () => {
     // A valid header followed by bytes that never terminate the tag list
-    const input = new Uint8Array(512 * 1024).fill(0xab)
-    input.set(concat(ascii('II'), u16le(42), u32le(8)), 0)
+    const build = (bytes: number) => {
+      const input = new Uint8Array(bytes).fill(0xab)
+      input.set(concat(ascii('II'), u16le(42), u32le(8)), 0)
+      return input
+    }
 
-    let thrown: unknown
-    const ms = elapsed(() => {
-      try {
-        imageSize(input)
-      } catch (err) {
-        thrown = err
-      }
-    })
-
-    assert.ok(ms < 100, `scanning 512KB took ${ms.toFixed(0)}ms`)
-    assert.ok(thrown instanceof TypeError, `threw ${thrown}`)
+    assert.throws(() => imageSize(build(SCAN_BYTES)), { name: 'TypeError' })
+    expectLinearScan(build)
   })
 })
 

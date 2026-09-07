@@ -89,3 +89,23 @@ export function elapsed(run: () => unknown): number {
   }
   return Number(process.hrtime.bigint() - start) / 1e6
 }
+
+/**
+ * CPU milliseconds spent in `run`, which is expected to throw or return.
+ *
+ * Wall-clock time measures the machine as much as the code: a CI runner with
+ * more jobs than cores keeps descheduling the work, and the longer of two
+ * scans absorbs more of that than the shorter one, which is enough to make a
+ * comparison between the two report as super-linear. CPU time counts only the
+ * work, so it stays comparable between a quiet laptop and a loaded runner.
+ */
+export function cpuMillis(run: () => unknown): number {
+  const start = process.cpuUsage()
+  try {
+    run()
+  } catch {
+    // A malformed input is expected to be rejected; only the cost matters here
+  }
+  const { user, system } = process.cpuUsage(start)
+  return (user + system) / 1000
+}
