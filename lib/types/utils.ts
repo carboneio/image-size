@@ -87,7 +87,7 @@ export interface Box {
   size: number
 }
 
-function readBox(input: Uint8Array, offset: number): Box | undefined {
+export function readBox(input: Uint8Array, offset: number): Box | undefined {
   const available = input.length - offset
   if (available < BOX_HEADER_SIZE) return
 

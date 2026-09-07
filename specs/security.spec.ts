@@ -11,7 +11,7 @@ import {
   u32be,
   u64be,
 } from './fixtures'
-import { imageSizeIsolated } from './helpers/isolate'
+import { elapsed, imageSizeIsolated } from './helpers/isolate'
 
 /**
  * Proofs that hostile inputs cannot hang, crash or leak through the public API.
@@ -92,6 +92,90 @@ describe('CVE-2025-71330, ICNS entry of length zero', () => {
       width: 512,
       height: 512,
       type: 'icns',
+    })
+  })
+})
+
+describe('CVE-2025-71329, HEIF property box of size zero', () => {
+  // https://github.com/advisories/GHSA-5p2g-fcmc-qvqq
+  const heifWith = (...properties: Uint8Array[]) =>
+    concat(
+      box('ftyp', ascii('heic'), u32be(0)),
+      box('meta', u32be(0), box('iprp', box('ipco', ...properties))),
+    )
+
+  it('does not spin on an ispe box whose size field is zero', () => {
+    const zeroSized = concat(
+      u32be(0),
+      ascii('ispe'),
+      u32be(0),
+      u32be(100),
+      u32be(100),
+    )
+    const { killed, outcome } = imageSizeIsolated(heifWith(zeroSized))
+    assert.equal(killed, false, 'imageSize never returned, the input hangs it')
+    // A size of zero means "up to the end of the file", so the property is
+    // still a well-formed one and describes a 100x100 image
+    assert.deepEqual(outcome, {
+      returned: { width: 100, height: 100, type: 'heic' },
+    })
+  })
+
+  it('walks a long property list in linear time', () => {
+    const ispe = box('ispe', u32be(0), u32be(64), u32be(64))
+    const input = heifWith(...Array.from({ length: 4000 }, () => ispe))
+    const ms = elapsed(() => imageSize(input))
+    assert.ok(ms < 250, `parsing 4000 properties took ${ms.toFixed(0)}ms`)
+  })
+
+  it('ignores properties too short to hold the values they should', () => {
+    const input = heifWith(
+      box('pixi'),
+      box('ispe', u32be(0), u32be(400), u32be(300)),
+    )
+    assert.deepEqual(imageSize(input), {
+      width: 400,
+      height: 300,
+      type: 'heic',
+    })
+  })
+
+  it('ignores a clean aperture that refines no image property', () => {
+    const input = heifWith(
+      box('clap', u32be(0), u32be(40), u32be(0), u32be(0)),
+      box('ispe', u32be(0), u32be(400), u32be(300)),
+    )
+    assert.deepEqual(imageSize(input), {
+      width: 400,
+      height: 300,
+      type: 'heic',
+    })
+  })
+
+  it('keeps the properties that survived a crop', () => {
+    // Every enclosing box is left open-ended, as a cropped file leaves them,
+    // and the file stops on a fragment too short to be a property
+    const openEnded = (name: string, ...content: Uint8Array[]) =>
+      concat(u32be(0), ascii(name), ...content)
+    const input = concat(
+      box('ftyp', ascii('heic'), u32be(0)),
+      openEnded(
+        'meta',
+        u32be(0),
+        openEnded(
+          'iprp',
+          openEnded(
+            'ipco',
+            box('ispe', u32be(0), u32be(400), u32be(300)),
+            ascii('isp'),
+          ),
+        ),
+      ),
+    )
+    assert.deepEqual(imageSize(input), {
+      width: 400,
+      height: 300,
+      type: 'heic',
     })
   })
 })
