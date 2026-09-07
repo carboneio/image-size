@@ -212,6 +212,26 @@ describe('CVE-2025-71329, JXL container box of size zero', () => {
     })
   })
 
+  it('finds the brand of a ftyp box with a 64-bit header', () => {
+    // A codestream declaring a small 8x8 image, enough to read a size from
+    const codestream = [0xff, 0x0a, 0x30, 0x54, 0x10, 0x08, 0x08, 0x00]
+    const largeFtyp = concat(
+      u32be(1),
+      ascii('ftyp'),
+      u64be(16 + 8),
+      ascii('jxl '),
+      u32be(0),
+    )
+    const input = concat(
+      u32be(12),
+      ascii('JXL '),
+      [0x0d, 0x0a, 0x87, 0x0a],
+      largeFtyp,
+      box('jxlc', codestream),
+    )
+    assert.equal(imageSize(input).type, 'jxl')
+  })
+
   it('rejects a codestream that ends mid-header with a TypeError', () => {
     const input = concat(header, box('jxlc', [0xff, 0x0a]))
     assert.throws(() => imageSize(input), {

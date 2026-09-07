@@ -62,7 +62,8 @@ export const JXL: IImage = {
     const ftypBox = findBox(input, 'ftyp', 0)
     if (!ftypBox) return false
 
-    const brand = toUTF8String(input, ftypBox.offset + 8, ftypBox.offset + 12)
+    const brandOffset = ftypBox.offset + ftypBox.headerSize
+    const brand = toUTF8String(input, brandOffset, brandOffset + 4)
     return brand === 'jxl '
   },
 
