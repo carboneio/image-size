@@ -255,6 +255,33 @@ describe('JPEG segment scanning', () => {
   })
 })
 
+describe('ICO entry count', () => {
+  const entry = (width: number, height: number) =>
+    concat([width, height, 0, 0], u16le(1), u16le(32), u32le(0), u32le(22))
+
+  it('does not invent the entries a file only claims to hold', () => {
+    // Announces 65535 icons, carries two
+    const input = concat(
+      u16le(0),
+      u16le(1),
+      u16le(65535),
+      entry(16, 16),
+      entry(32, 32),
+    )
+    assert.deepEqual(imageSize(input).images, [
+      { width: 16, height: 16 },
+      { width: 32, height: 32 },
+    ])
+  })
+
+  it('rejects a header with no entry behind it', () => {
+    assert.throws(() => imageSize(concat(u16le(0), u16le(1), u16le(3))), {
+      name: 'TypeError',
+      message: 'Invalid ICO, no entries found',
+    })
+  })
+})
+
 describe('TIFF tag scanning', () => {
   it('scans a hostile file in linear time', () => {
     // A valid header followed by bytes that never terminate the tag list
