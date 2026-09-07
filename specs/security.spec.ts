@@ -2,7 +2,7 @@ import * as assert from 'node:assert'
 import { describe, it } from 'node:test'
 
 import { imageSize } from '../lib'
-import { ascii, buildFixture } from './fixtures'
+import { ascii, box, buildFixture, concat, u32be, u64be } from './fixtures'
 import { imageSizeIsolated } from './helpers/isolate'
 
 /**
@@ -39,5 +39,61 @@ describe('reads stay inside the input view', () => {
     for (const signature of [[0x00], [0x38], [0x42], [0x44, 0x44]]) {
       assert.throws(() => imageSize(Uint8Array.from(signature)), TypeError)
     }
+  })
+})
+
+describe('ISO base media box geometry', () => {
+  const ftyp = box('ftyp', ascii('heic'), u32be(0))
+  // The `meta` payload: a full-box version/flags word, then the property tree
+  const metaBody = concat(
+    u32be(0),
+    box('iprp', box('ipco', box('ispe', u32be(0), u32be(400), u32be(300)))),
+  )
+  const heic = { width: 400, height: 300, type: 'heic' }
+
+  it('reads a file cropped inside a box that declares more than it holds', () => {
+    // A HEIF cropped after its property tree: `meta` still announces the bytes
+    // that were cut away. The boxes that did survive have to remain readable.
+    const meta = concat(
+      u32be(metaBody.length + 8 + 1000),
+      ascii('meta'),
+      metaBody,
+    )
+    assert.deepEqual(imageSize(concat(ftyp, meta)), heic)
+  })
+
+  it('reads a box that carries its size as a 64-bit largesize', () => {
+    const meta = concat(
+      u32be(1),
+      ascii('meta'),
+      u64be(metaBody.length + 16),
+      metaBody,
+    )
+    assert.deepEqual(imageSize(concat(ftyp, meta)), heic)
+  })
+
+  it('reads a last box whose size of zero means "up to the end of file"', () => {
+    const meta = concat(u32be(0), ascii('meta'), metaBody)
+    assert.deepEqual(imageSize(concat(ftyp, meta)), heic)
+  })
+
+  it('rejects a box smaller than its own header', () => {
+    const runt = concat(u32be(4), ascii('meta'), metaBody)
+    assert.throws(() => imageSize(concat(ftyp, runt)), TypeError)
+
+    // The same rule applies to the very first box, which then fails detection
+    const runtFtyp = concat(u32be(4), ascii('ftyp'), ascii('heic'))
+    assert.throws(() => imageSize(runtFtyp), {
+      message: 'unsupported file type: undefined',
+    })
+  })
+
+  it('rejects a largesize box whose 64-bit size is missing', () => {
+    const truncated = concat(u32be(1), ascii('meta'), u32be(0))
+    assert.throws(() => imageSize(concat(ftyp, truncated)), TypeError)
+  })
+
+  it('rejects a trailing fragment too short to hold a box header', () => {
+    assert.throws(() => imageSize(concat(ftyp, u32be(0x6d657461))), TypeError)
   })
 })

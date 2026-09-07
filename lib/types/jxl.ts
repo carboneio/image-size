@@ -6,7 +6,10 @@ import { findBox, toUTF8String } from './utils'
 function extractCodestream(input: Uint8Array): Uint8Array | undefined {
   const jxlcBox = findBox(input, 'jxlc', 0)
   if (jxlcBox) {
-    return input.slice(jxlcBox.offset + 8, jxlcBox.offset + jxlcBox.size)
+    return input.slice(
+      jxlcBox.offset + jxlcBox.headerSize,
+      jxlcBox.offset + jxlcBox.size,
+    )
   }
 
   const partialStreams = extractPartialStreams(input)
@@ -24,8 +27,12 @@ function extractPartialStreams(input: Uint8Array): Uint8Array[] {
   while (offset < input.length) {
     const jxlpBox = findBox(input, 'jxlp', offset)
     if (!jxlpBox) break
+    // A `jxlp` payload opens with a four byte sequence number
     partialStreams.push(
-      input.slice(jxlpBox.offset + 12, jxlpBox.offset + jxlpBox.size),
+      input.slice(
+        jxlpBox.offset + jxlpBox.headerSize + 4,
+        jxlpBox.offset + jxlpBox.size,
+      ),
     )
     offset = jxlpBox.offset + jxlpBox.size
   }

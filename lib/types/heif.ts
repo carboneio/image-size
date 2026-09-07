@@ -19,15 +19,19 @@ export const HEIF: IImage = {
     const ftypBox = findBox(input, 'ftyp', 0)
     if (!ftypBox) return false
 
-    const brand = toUTF8String(input, ftypBox.offset + 8, ftypBox.offset + 12)
+    const brandOffset = ftypBox.offset + ftypBox.headerSize
+    const brand = toUTF8String(input, brandOffset, brandOffset + 4)
     return brand in brandMap
   },
 
   calculate(input) {
     // Based on https://nokiatech.github.io/heif/technical.html
+    // `meta` is a full box, so its payload starts after a version/flags word
     const metaBox = findBox(input, 'meta', 0)
-    const iprpBox = metaBox && findBox(input, 'iprp', metaBox.offset + 12)
-    const ipcoBox = iprpBox && findBox(input, 'ipco', iprpBox.offset + 8)
+    const iprpBox =
+      metaBox && findBox(input, 'iprp', metaBox.offset + metaBox.headerSize + 4)
+    const ipcoBox =
+      iprpBox && findBox(input, 'ipco', iprpBox.offset + iprpBox.headerSize)
 
     if (!ipcoBox) {
       throw new TypeError('Invalid HEIF, no ipco box found')
@@ -36,22 +40,27 @@ export const HEIF: IImage = {
     const type = toUTF8String(input, 8, 12)
 
     const images: ISize[] = []
-    let currentOffset = ipcoBox.offset + 8
+    let currentOffset = ipcoBox.offset + ipcoBox.headerSize
 
     // Find all ispe and clap boxes
     while (currentOffset < ipcoBox.offset + ipcoBox.size) {
       const ispeBox = findBox(input, 'ispe', currentOffset)
       if (!ispeBox) break
 
-      const rawWidth = readUInt32BE(input, ispeBox.offset + 12)
-      const rawHeight = readUInt32BE(input, ispeBox.offset + 16)
+      // `ispe` is a full box: version/flags, then the stored dimensions
+      const sizeOffset = ispeBox.offset + ispeBox.headerSize + 4
+      const rawWidth = readUInt32BE(input, sizeOffset)
+      const rawHeight = readUInt32BE(input, sizeOffset + 4)
 
       // Look for a clap box after the ispe box
       const clapBox = findBox(input, 'clap', currentOffset)
       let width = rawWidth
-      let height = rawHeight
+      const height = rawHeight
       if (clapBox && clapBox.offset < ipcoBox.offset + ipcoBox.size) {
-        const cropRight = readUInt32BE(input, clapBox.offset + 12)
+        const cropRight = readUInt32BE(
+          input,
+          clapBox.offset + clapBox.headerSize + 4,
+        )
         width = rawWidth - cropRight
       }
 

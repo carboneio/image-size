@@ -70,28 +70,58 @@ export function readUInt(
   return methods[methodName](input, offset)
 }
 
-function readBox(input: Uint8Array, offset: number) {
-  if (input.length - offset < 4) return
-  const boxSize = readUInt32BE(input, offset)
-  if (input.length - offset < boxSize) return
-  return {
-    name: toUTF8String(input, 4 + offset, 8 + offset),
-    offset,
-    size: boxSize,
+// A box header is a 32-bit size followed by a four-character code. Two sizes
+// are special: zero means the box runs to the end of the file, and one means
+// the real size is the 64-bit value stored right after the header.
+const BOX_HEADER_SIZE = 8
+const LARGE_BOX_HEADER_SIZE = 16
+const SIZE_EXTENDS_TO_EOF = 0
+const SIZE_IS_64_BIT = 1
+
+export interface Box {
+  name: string
+  offset: number
+  /** Bytes between the start of the box and its payload */
+  headerSize: number
+  /** Bytes of the box that are actually present in the input */
+  size: number
+}
+
+function readBox(input: Uint8Array, offset: number): Box | undefined {
+  const available = input.length - offset
+  if (available < BOX_HEADER_SIZE) return
+
+  const name = toUTF8String(input, offset + 4, offset + 8)
+  const declaredSize = readUInt32BE(input, offset)
+
+  let headerSize = BOX_HEADER_SIZE
+  let size = declaredSize
+  if (declaredSize === SIZE_EXTENDS_TO_EOF) {
+    size = available
+  } else if (declaredSize === SIZE_IS_64_BIT) {
+    if (available < LARGE_BOX_HEADER_SIZE) return
+    headerSize = LARGE_BOX_HEADER_SIZE
+    size = Number(readUInt64(input, offset + BOX_HEADER_SIZE, true))
   }
+
+  // A box cannot be smaller than the header that describes it
+  if (size < headerSize) return
+
+  // Clamping instead of rejecting keeps a cropped file readable, as long as
+  // the boxes we need survived the cut
+  return { name, offset, headerSize, size: Math.min(size, available) }
 }
 
 export function findBox(
   input: Uint8Array,
   boxName: string,
   currentOffset: number,
-) {
+): Box | undefined {
   while (currentOffset < input.length) {
     const box = readBox(input, currentOffset)
-    if (!box) break
+    if (!box) return
     if (box.name === boxName) return box
-    // Fix the infinite loop by ensuring offset always increases
-    // If box.size is 0, advance by at least 8 bytes (the size of the box header)
-    currentOffset += box.size > 0 ? box.size : 8
+    // readBox never returns a box shorter than its header, so this advances
+    currentOffset += box.size
   }
 }

@@ -33,9 +33,10 @@ const expectTypeError = (input: Uint8Array, message: string) =>
 describe('HEIF', () => {
   const ftyp = box('ftyp', ascii('heic'), u32be(0))
 
-  it('rejects a file whose ftyp box runs past the end of the input', () => {
+  it('recognises a file cut short after its ftyp box, then gives up', () => {
     const truncated = concat(u32be(0xffff), ascii('ftyp'), ascii('heic'))
-    assert.equal(HEIF.validate(truncated), false)
+    assert.equal(HEIF.validate(truncated), true)
+    expectTypeError(truncated, 'Invalid HEIF, no ipco box found')
   })
 
   it('throws when the property container is missing', () => {
@@ -361,12 +362,16 @@ describe('WebP', () => {
 })
 
 describe('findBox', () => {
-  it('skips over a zero-length box instead of looping forever', () => {
+  it('treats a box sized zero as the last box of the file', () => {
+    // ISO base media format: a size of zero means the box runs to the end of
+    // the file, so nothing that follows it is a sibling to be scanned
     const input = concat(u32be(0), ascii('zero'), box('test', filler(4)))
-    assert.deepEqual(findBox(input, 'test', 0), {
-      name: 'test',
-      offset: 8,
-      size: 12,
+    assert.equal(findBox(input, 'test', 0), undefined)
+    assert.deepEqual(findBox(input, 'zero', 0), {
+      name: 'zero',
+      offset: 0,
+      headerSize: 8,
+      size: input.length,
     })
   })
 })
