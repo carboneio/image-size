@@ -16,7 +16,7 @@ export class BitReader {
 
     while (bitsRead < length) {
       if (this.byteOffset >= this.input.length) {
-        throw new Error('Reached end of input')
+        throw new TypeError('Reached end of input')
       }
 
       const currentByte = this.input[this.byteOffset]

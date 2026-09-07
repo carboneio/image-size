@@ -211,6 +211,14 @@ describe('CVE-2025-71329, JXL container box of size zero', () => {
       message: 'No codestream found in JXL container',
     })
   })
+
+  it('rejects a codestream that ends mid-header with a TypeError', () => {
+    const input = concat(header, box('jxlc', [0xff, 0x0a]))
+    assert.throws(() => imageSize(input), {
+      name: 'TypeError',
+      message: 'Reached end of input',
+    })
+  })
 })
 
 describe('JPEG segment scanning', () => {
