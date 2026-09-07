@@ -44,7 +44,6 @@
   "engines": {
     "node": ">=16.x"
   },
-  "packageManager": "yarn@4.0.2",
   "bin": "bin/image-size.js",
   "scripts": {
     "lint": "biome check lib specs",
@@ -55,7 +54,7 @@
     "clean": "rm -rf dist docs",
     "generate-docs": "typedoc",
     "build": "tsup",
-    "prepack": "yarn clean && yarn build"
+    "prepack": "npm run clean && npm run build"
   },
   "keywords": [
     "image",

@@ -200,12 +200,13 @@ console.log(width, height, orientation)
 ## Development
 
 ```bash
-yarn test    # unit tests, with a 100% coverage threshold
-yarn bench   # detection throughput, per format, on small and large files
+npm ci          # install dependencies from package-lock.json
+npm test        # unit tests, with a 100% coverage threshold
+npm run bench   # detection throughput, per format, on small and large files
 ```
 
-`yarn bench` accepts `--filter=<substring>` to benchmark a single format, e.g.
-`yarn bench --filter=webp`.
+`npm run bench` accepts `--filter=<substring>` to benchmark a single format,
+e.g. `npm run bench -- --filter=webp`.
 
 ## License
 
