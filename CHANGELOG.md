@@ -4,9 +4,10 @@ All notable changes to this project are documented in this file.
 
 ## [3.0.0] - 2026-09-07
 
-A security release. Three published denial-of-service advisories are closed,
-along with seven further problems found while auditing the parsers, and the
-library no longer hands back dimensions that no image can have.
+A security release. Two published denial-of-service advisories are closed,
+between them covering three parsers, along with seven further problems found
+while auditing the others, and the library no longer hands back dimensions
+that no image can have.
 
 Removing those pathological scans also made the library about twice as fast on
 valid images. The **Performance** section has the measurements.
@@ -33,14 +34,16 @@ touched. The proofs live in `specs/security.spec.ts`.
   read straight out of the caller's process. This is the only entry here that
   discloses information rather than denying service.
 
-- **[CVE-2025-71330] ICNS infinite loop.**
-  ([GHSA-w3rx-r6r6-pgpr](https://github.com/advisories/GHSA-w3rx-r6r6-pgpr))
+- **ICNS infinite loop.**
+  [CVE-2025-71330](https://nvd.nist.gov/vuln/detail/CVE-2025-71330),
+  [GHSA-w3rx-r6r6-pgpr](https://github.com/advisories/GHSA-w3rx-r6r6-pgpr).
   An ICNS entry declares its own length and the parser added that length to its
   cursor with no lower bound. An entry of length zero left the cursor in place
   and spun the event loop for ever. A 64 byte file was enough.
 
-- **[CVE-2025-71329] HEIF and JXL infinite loops.**
-  ([GHSA-5p2g-fcmc-qvqq](https://github.com/advisories/GHSA-5p2g-fcmc-qvqq))
+- **HEIF and JXL infinite loops.**
+  [CVE-2025-71329](https://nvd.nist.gov/vuln/detail/CVE-2025-71329),
+  [GHSA-5p2g-fcmc-qvqq](https://github.com/advisories/GHSA-5p2g-fcmc-qvqq).
   A box declaring a size of zero never moved the box cursor forward, in the
   HEIF property walk and in the JXL partial codestream walk alike. Box sizes are
   now read as the ISO base media file format defines them, where zero means the
@@ -186,6 +189,11 @@ everything below concerns malformed input.
   `RangeError` from `DataView`, and a truncated JXL codestream as a bare
   `Error`. Integrations that filter on the error type should now expect
   `TypeError` throughout.
+- **A JXL container with no codestream says so**, with
+  `No codestream found in JXL container`. An empty `jxlc` box, or `jxlp` boxes
+  carrying nothing but their headers, used to reach the bit reader and fail
+  there with `Reached end of input`, which described the symptom rather than
+  the problem.
 - **A size of zero, a negative size or `NaN` is now an error** rather than a
   returned value, with the message `Invalid <type>, implausible size <w>x<h>`.
   This is the change most likely to surface in an existing integration: code
@@ -232,6 +240,3 @@ and positive, so nothing downstream breaks.
 A PNM header using CRLF line endings is rejected, because the parser assumes a
 single byte separates the signature from the first line. This is unchanged
 from 2.x.
-
-[CVE-2025-71330]: https://github.com/advisories/GHSA-w3rx-r6r6-pgpr
-[CVE-2025-71329]: https://github.com/advisories/GHSA-5p2g-fcmc-qvqq
