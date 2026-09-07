@@ -6,7 +6,9 @@ import { findBox, toUTF8String } from './utils'
 function extractCodestream(input: Uint8Array): Uint8Array | undefined {
   const jxlcBox = findBox(input, 'jxlc', 0)
   if (jxlcBox) {
-    return input.slice(
+    // The stream parser only reads the first few bytes of the header, so a
+    // view is enough where a copy would duplicate the whole image
+    return input.subarray(
       jxlcBox.offset + jxlcBox.headerSize,
       jxlcBox.offset + jxlcBox.size,
     )
@@ -29,7 +31,7 @@ function extractPartialStreams(input: Uint8Array): Uint8Array[] {
     if (!jxlpBox) break
     // A `jxlp` payload opens with a four byte sequence number
     partialStreams.push(
-      input.slice(
+      input.subarray(
         jxlpBox.offset + jxlpBox.headerSize + 4,
         jxlpBox.offset + jxlpBox.size,
       ),
