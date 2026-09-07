@@ -1,4 +1,5 @@
 import * as assert from 'node:assert'
+import * as fs from 'node:fs'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -39,8 +40,8 @@ describe('imageSizeFromFile', () => {
     const path = join(directory, 'queued.png')
     await writeFile(path, data)
 
-    // No job can start until the budget is raised again, which forces the
-    // queue to be picked up by the retry timer rather than by the caller.
+    // No job can start until the budget is raised again, so this one has to
+    // be picked up by the call that raises it
     setConcurrency(0)
     const pending = imageSizeFromFile(path)
     setConcurrency(DEFAULT_CONCURRENCY)
@@ -48,6 +49,48 @@ describe('imageSizeFromFile', () => {
     const dimensions = await pending
     assert.equal(dimensions.width, width)
     assert.equal(dimensions.height, height)
+  })
+
+  it('never holds more files open at once than the budget allows', async () => {
+    const paths = await Promise.all(
+      Array.from({ length: 8 }, async (_, index) => {
+        const { data } = buildFixture('png', {
+          width: 8 + index,
+          height: 8,
+          payload: 64,
+        })
+        const path = join(directory, `in-flight-${index}.png`)
+        await writeFile(path, data)
+        return path
+      }),
+    )
+
+    // Count the handles that are open at the same moment, by watching the
+    // window between an open and its matching close
+    const open = fs.promises.open
+    let inFlight = 0
+    let peak = 0
+    fs.promises.open = (async (...args: Parameters<typeof open>) => {
+      inFlight += 1
+      peak = Math.max(peak, inFlight)
+      const handle = await open(...args)
+      const close = handle.close.bind(handle)
+      handle.close = () => {
+        inFlight -= 1
+        return close()
+      }
+      return handle
+    }) as typeof open
+
+    setConcurrency(3)
+    try {
+      await Promise.all(paths.map((path) => imageSizeFromFile(path)))
+    } finally {
+      fs.promises.open = open
+      setConcurrency(DEFAULT_CONCURRENCY)
+    }
+
+    assert.ok(peak <= 3, `held ${peak} files open at once, with a budget of 3`)
   })
 
   it('resolves every file when more are requested than the budget allows', async () => {
