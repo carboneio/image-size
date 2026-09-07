@@ -255,6 +255,27 @@ describe('JPEG segment scanning', () => {
   })
 })
 
+describe('dimensions handed back to the caller', () => {
+  const cases: [string, Uint8Array][] = [
+    ['a PNM header whose dimensions are not numbers', ascii('P1\nabc def\n')],
+    ['a PNM header with negative dimensions', ascii('P1\n-5 -5\n')],
+    [
+      'a BMP declaring no surface at all',
+      concat(ascii('BM'), new Uint8Array(52)),
+    ],
+    [
+      'a GIF declaring no surface at all',
+      concat(ascii('GIF89a'), new Uint8Array(7)),
+    ],
+  ]
+
+  for (const [description, input] of cases) {
+    it(`rejects ${description}`, () => {
+      assert.throws(() => imageSize(input), TypeError)
+    })
+  }
+})
+
 describe('format detection', () => {
   it('does not let one parser abort the sweep for the others', () => {
     // Two bytes: the JXL codestream signature and nothing else. Detection

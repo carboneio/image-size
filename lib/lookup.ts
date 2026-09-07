@@ -12,6 +12,25 @@ const globalOptions: Options = {
 }
 
 /**
+ * Last line of defence before the caller.
+ *
+ * No image has a fractional, negative or empty side, so anything else is a
+ * parser that read past its data or misread a field. Catching it here keeps
+ * NaN and undefined out of the returned object whatever the format does.
+ */
+function assertPlausible(size: ISizeCalculationResult): void {
+  const { width, height, type } = size
+  if (
+    !Number.isInteger(width) ||
+    !Number.isInteger(height) ||
+    width <= 0 ||
+    height <= 0
+  ) {
+    throw new TypeError(`Invalid ${type}, implausible size ${width}x${height}`)
+  }
+}
+
+/**
  * Return size information based on an Uint8Array
  *
  * @param {Uint8Array} input
@@ -44,6 +63,7 @@ export function imageSize(input: Uint8Array): ISizeCalculationResult {
         size.height = largestImage.height
       }
 
+      assertPlausible(size)
       return size
     }
   }
