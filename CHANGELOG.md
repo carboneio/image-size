@@ -5,11 +5,17 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.1.0] - 2026-09-07
+## [3.0.0] - 2026-09-07
 
 A security release. Three published denial-of-service advisories are closed,
 along with five further problems found while auditing the parsers, and the
 library no longer hands back dimensions that no image can have.
+
+It is a major version because the hardening is observable: inputs that used to
+come back as `0 x 0`, `NaN x NaN` or a `RangeError` now raise a `TypeError`.
+Valid images return exactly what they returned in 2.x, so an upgrade is only
+breaking for code that was relying on the old answers to malformed files. The
+**Changed** section below lists every difference.
 
 Every fix in this release was written test first: a case going through the
 public `imageSize` was added and observed to fail before the parser was
@@ -101,10 +107,11 @@ paths.
 - `tiff.ts` imported `node:fs` without using it, dragging a Node builtin into
   every browser bundle of the library.
 
-### Changed
+### Changed (breaking)
 
-These are the observable differences for a caller. Valid images return exactly
-what they returned before; everything below concerns malformed input.
+These are the observable differences for a caller, and the reason this is a
+major version. Valid images return exactly what they returned in 2.x;
+everything below concerns malformed input.
 
 - **Malformed input always raises `TypeError`.** Short buffers used to escape as
   `RangeError` from `DataView`, and a truncated JXL codestream as a bare
@@ -137,6 +144,6 @@ window is deliberately left alone here: it is a detection question rather than
 a safety one, and it belongs with the scanner rewrite proposed in
 [#448](https://codeberg.org/image-size/image-size/pulls/448).
 
-[2.1.0]: https://codeberg.org/image-size/image-size/compare/v2.0.2...v2.1.0
+[3.0.0]: https://codeberg.org/image-size/image-size/compare/v2.0.2...v3.0.0
 [CVE-2025-71330]: https://github.com/advisories/GHSA-w3rx-r6r6-pgpr
 [CVE-2025-71329]: https://github.com/advisories/GHSA-5p2g-fcmc-qvqq
