@@ -115,13 +115,14 @@ export function readBox(input: Uint8Array, offset: number): Box | undefined {
 export function findBox(
   input: Uint8Array,
   boxName: string,
-  currentOffset: number,
+  startOffset: number,
 ): Box | undefined {
-  while (currentOffset < input.length) {
-    const box = readBox(input, currentOffset)
+  let offset = startOffset
+  while (offset < input.length) {
+    const box = readBox(input, offset)
     if (!box) return
     if (box.name === boxName) return box
     // readBox never returns a box shorter than its header, so this advances
-    currentOffset += box.size
+    offset += box.size
   }
 }
