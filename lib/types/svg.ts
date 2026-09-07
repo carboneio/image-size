@@ -87,12 +87,17 @@ function calculateByViewbox(attrs: IAttributes, viewbox: IAttributes): ISize {
   }
 }
 
+// Scan only the first kilo-byte to speed up the check on larger files. The
+// root tag has to be complete within it for validate to accept the file, so
+// calculate has nothing to gain from decoding any more than this.
+const ROOT_TAG_WINDOW = 1000
+
 export const SVG: IImage = {
-  // Scan only the first kilo-byte to speed up the check on larger files
-  validate: (input) => svgReg.test(toUTF8String(input, 0, 1000)),
+  validate: (input) => svgReg.test(toUTF8String(input, 0, ROOT_TAG_WINDOW)),
 
   calculate(input) {
-    const root = toUTF8String(input).match(extractorRegExps.root)
+    const header = toUTF8String(input, 0, ROOT_TAG_WINDOW)
+    const root = header.match(extractorRegExps.root)
     if (root) {
       const attrs = parseAttributes(root[0])
       if (attrs.width && attrs.height) {
