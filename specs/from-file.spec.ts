@@ -25,6 +25,7 @@ describe('imageSizeFromFile', () => {
     const path = join(directory, 'empty.png')
     await writeFile(path, '')
     await assert.rejects(() => imageSizeFromFile(path), {
+      name: 'TypeError',
       message: 'Empty file',
     })
   })

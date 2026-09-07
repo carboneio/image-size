@@ -34,12 +34,14 @@ const processQueue = async () => {
     try {
       const { size } = await handle.stat()
       if (size <= 0) {
-        throw new Error('Empty file')
+        throw new TypeError('Empty file')
       }
       const inputSize = Math.min(size, MaxInputSize)
       const input = new Uint8Array(inputSize)
-      await handle.read(input, 0, inputSize, 0)
-      resolve(imageSize(input))
+      // A read is allowed to come back short. Parsing the whole buffer would
+      // feed the parsers zeros that were never in the file.
+      const { bytesRead } = await handle.read(input, 0, inputSize, 0)
+      resolve(imageSize(input.subarray(0, bytesRead)))
     } catch (err) {
       reject(err as Error)
     } finally {
