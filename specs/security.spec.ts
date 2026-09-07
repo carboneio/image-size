@@ -8,7 +8,9 @@ import {
   buildFixture,
   concat,
   filler,
+  u16le,
   u32be,
+  u32le,
   u64be,
 } from './fixtures'
 import { elapsed, imageSizeIsolated } from './helpers/isolate'
@@ -242,6 +244,26 @@ describe('JPEG segment scanning', () => {
       height: 456,
       type: 'jpg',
     })
+  })
+})
+
+describe('TIFF tag scanning', () => {
+  it('scans a hostile file in linear time', () => {
+    // A valid header followed by bytes that never terminate the tag list
+    const input = new Uint8Array(512 * 1024).fill(0xab)
+    input.set(concat(ascii('II'), u16le(42), u32le(8)), 0)
+
+    let thrown: unknown
+    const ms = elapsed(() => {
+      try {
+        imageSize(input)
+      } catch (err) {
+        thrown = err
+      }
+    })
+
+    assert.ok(ms < 100, `scanning 512KB took ${ms.toFixed(0)}ms`)
+    assert.ok(thrown instanceof TypeError, `threw ${thrown}`)
   })
 })
 

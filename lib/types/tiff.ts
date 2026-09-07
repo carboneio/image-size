@@ -1,4 +1,3 @@
-import * as fs from 'node:fs'
 import type { IImage, ISize } from './interface'
 import { readUInt, readUInt64, toHexString, toUTF8String } from './utils'
 
@@ -32,15 +31,15 @@ interface TIFFInfo extends ISize {
   compression?: number
 }
 
-// Read IFD (image-file-directory) into a buffer
-function readIFD(input: Uint8Array, { isBigEndian, isBigTiff }: TIFFFormat) {
+// Where the entries of the image-file-directory begin
+function findIFD(input: Uint8Array, { isBigEndian, isBigTiff }: TIFFFormat) {
   const ifdOffset = isBigTiff
     ? Number(readUInt64(input, 8, isBigEndian))
     : readUInt(input, 32, 4, isBigEndian)
   const entryCountSize = isBigTiff
     ? CONSTANTS.COUNT_SIZE.BIG
     : CONSTANTS.COUNT_SIZE.STANDARD
-  return input.slice(ifdOffset + entryCountSize)
+  return ifdOffset + entryCountSize
 }
 
 function readTagValue(
@@ -68,34 +67,32 @@ function readTagValue(
   }
 }
 
-function nextTag(input: Uint8Array, isBigTiff: boolean) {
-  const entrySize = isBigTiff
-    ? CONSTANTS.ENTRY_SIZE.BIG
-    : CONSTANTS.ENTRY_SIZE.STANDARD
-  if (input.length > entrySize) {
-    return input.slice(entrySize)
-  }
-}
-
 interface TIFFTags {
   [key: number]: number
 }
 
 function extractTags(
   input: Uint8Array,
+  start: number,
   { isBigEndian, isBigTiff }: TIFFFormat,
 ): TIFFTags {
   const tags: TIFFTags = {}
+  const entrySize = isBigTiff
+    ? CONSTANTS.ENTRY_SIZE.BIG
+    : CONSTANTS.ENTRY_SIZE.STANDARD
+  const valueOffset = isBigTiff ? 12 : 8
 
-  let temp: Uint8Array | undefined = input
-  while (temp?.length) {
-    const code = readUInt(temp, 16, 0, isBigEndian)
-    const type = readUInt(temp, 16, 2, isBigEndian)
-    const length = isBigTiff
-      ? Number(readUInt64(temp, 4, isBigEndian))
-      : readUInt(temp, 32, 4, isBigEndian)
-
+  // Walking by index rather than reslicing the remainder on every entry: a
+  // file whose tag list never terminates used to cost quadratic time
+  let offset = start
+  while (offset + entrySize <= input.length) {
+    const code = readUInt(input, 16, offset, isBigEndian)
     if (code === 0) break
+
+    const type = readUInt(input, 16, offset + 2, isBigEndian)
+    const length = isBigTiff
+      ? Number(readUInt64(input, offset + 4, isBigEndian))
+      : readUInt(input, 32, offset + 4, isBigEndian)
 
     if (
       length === 1 &&
@@ -103,11 +100,10 @@ function extractTags(
         type === CONSTANTS.TYPE.LONG ||
         (isBigTiff && type === CONSTANTS.TYPE.LONG8))
     ) {
-      const valueOffset = isBigTiff ? 12 : 8
-      tags[code] = readTagValue(temp, type, valueOffset, isBigEndian)
+      tags[code] = readTagValue(input, type, offset + valueOffset, isBigEndian)
     }
 
-    temp = nextTag(temp, isBigTiff)
+    offset += entrySize
   }
 
   return tags
@@ -152,8 +148,7 @@ export const TIFF: IImage = {
       validateBigTIFFHeader(input, format.isBigEndian)
     }
 
-    const ifdBuffer = readIFD(input, format)
-    const tags = extractTags(ifdBuffer, format)
+    const tags = extractTags(input, findIFD(input, format), format)
 
     const info: TIFFInfo = {
       height: tags[CONSTANTS.TAG.HEIGHT],
