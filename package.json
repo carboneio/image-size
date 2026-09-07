@@ -1,6 +1,6 @@
 {
   "name": "image-size",
-  "version": "2.0.2",
+  "version": "2.1.0",
   "description": "get dimensions of any image file",
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
@@ -39,7 +39,8 @@
   },
   "files": [
     "dist",
-    "bin/image-size.js"
+    "bin/image-size.js",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=16.x"
