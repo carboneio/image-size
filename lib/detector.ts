@@ -16,11 +16,21 @@ const firstBytes = new Map<number, imageType>([
   [0xff, 'jpg'],
 ])
 
+// A validator only answers "is this input mine?". One that cannot read far
+// enough to tell must not abort the sweep for the formats after it.
+function validates(type: imageType, input: Uint8Array): boolean {
+  try {
+    return typeHandlers.get(type)!.validate(input)
+  } catch {
+    return false
+  }
+}
+
 export function detector(input: Uint8Array): imageType | undefined {
   const byte = input[0]
   const type = firstBytes.get(byte)
-  if (type && typeHandlers.get(type)!.validate(input)) {
+  if (type && validates(type, input)) {
     return type
   }
-  return types.find((type) => typeHandlers.get(type)!.validate(input))
+  return types.find((candidate) => validates(candidate, input))
 }

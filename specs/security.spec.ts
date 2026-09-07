@@ -255,6 +255,18 @@ describe('JPEG segment scanning', () => {
   })
 })
 
+describe('format detection', () => {
+  it('does not let one parser abort the sweep for the others', () => {
+    // Two bytes: the JXL codestream signature and nothing else. Detection
+    // walks every format, and the ones that cannot read that far must simply
+    // answer no, rather than reporting their own truncation as the verdict.
+    assert.throws(() => imageSize(Uint8Array.from([0xff, 0x0a])), {
+      name: 'TypeError',
+      message: 'Reached end of input',
+    })
+  })
+})
+
 describe('ICO entry count', () => {
   const entry = (width: number, height: number) =>
     concat([width, height, 0, 0], u16le(1), u16le(32), u32le(0), u32le(22))
