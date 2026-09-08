@@ -8,11 +8,9 @@
 [![Code style: Biome](https://img.shields.io/badge/code_style-biome-60a5fa.svg?style=flat-square)](https://biomejs.dev/)
 [![Maintenance](https://img.shields.io/badge/Maintained%3F-yes-green.svg?style=flat-square)](https://github.com/carboneio/image-size)
 
-After a thorough security audit (pentest) of our dependencies, we decided to fork this project to fix several vulnerabilities and, in the process, optimize the library. For a detailed list of changes, please see the [full changelog](CHANGELOG.md).
+After a thorough security audit (pentest) of our dependencies, we decided to fork this project ([image-size on GitHub](https://github.com/image-size/image-size) and [image-size on Codeberg](https://codeberg.org/image-size/image-size)) to fix several vulnerabilities and, in the process, optimize the library. For a detailed list of changes, please see the [full changelog](CHANGELOG.md).
 
-We started by ensuring the test suite had 100% code coverage before making any changes. We also compared our results and performance with the tests from [sharp](https://github.com/lovell/sharp), a widely used, more general-purpose library.
-
-This package is a fork of [image-size on GitHub](https://github.com/image-size/image-size) and [image-size on Codeberg](https://codeberg.org/image-size/image-size), optimized and maintained by [Carbone](https://carbone.io) to provide the fastest image-size library for Node.js.
+We started by ensuring the test suite had 100% code coverage before making any changes. We also compared our results and [Performance section](#performance) with the tests from [sharp](https://github.com/lovell/sharp), a widely used, more general-purpose library.  
 
 We would like to warmly thank the original developer of this library for their excellent work. We are maintaining this fork only because we needed to apply some urgent fixes and improvements; as soon as the original project incorporates these corrections, we will be very happy to remove this fork and return to the main repository.
 
@@ -21,12 +19,14 @@ Please note that we will maintain this project as long as it remains relevant to
 Fast, lightweight NodeJS package to get dimensions of any image file or buffer.
 
 ## Key Features
+
 - Zero dependencies
 - Supports all major image formats
 - Works with both files and buffers
 - Minimal memory footprint - reads only image headers
 - ESM and CommonJS support
 - TypeScript types included
+- Tested via GitHub Actions CI on Node.js 18, 20, 22, 24, and 26
 
 ## Supported formats
 
