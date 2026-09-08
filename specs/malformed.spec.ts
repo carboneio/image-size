@@ -17,6 +17,7 @@ import {
   u16be,
   u16le,
   u32be,
+  u32le,
   u64le,
 } from './fixtures'
 
@@ -149,6 +150,26 @@ describe('JPEG', () => {
       ),
       sof0(123, 456),
     )
+
+  /** A frame header of any kind: precision, height, width, one component */
+  const frame = (marker: number, width: number, height: number) =>
+    jpegSegment(marker, [8], u16be(height), u16be(width), [1, 1, 0x11, 0])
+
+  it('reads a lossless frame header', () => {
+    // 0xC3 opens a lossless frame. In the C0..CF range only C4 (Huffman
+    // tables), C8 (reserved) and CC (arithmetic conditioning) are not frames.
+    const input = concat(
+      [0xff, 0xd8],
+      jpegSegment(0xee, ascii('Adobe')),
+      frame(0xc3, 227, 149),
+    )
+    assert.deepEqual(imageSize(input), { width: 227, height: 149, type: 'jpg' })
+  })
+
+  it('reads a file that opens straight on a lossless frame header', () => {
+    const input = concat([0xff, 0xd8], frame(0xc3, 227, 149))
+    assert.deepEqual(imageSize(input), { width: 227, height: 149, type: 'jpg' })
+  })
 
   it('reads the orientation tag', () => {
     const input = withExif(exifEntry(274, 3, 1))
@@ -320,6 +341,67 @@ describe('SVG', () => {
 describe('TIFF', () => {
   const bigTiffHeader = (byteSize: number) =>
     concat(ascii('II'), u16le(43), u16le(byteSize), u16le(0), u64le(16))
+
+  /** A little-endian LONG tag holding its value inline */
+  const tag = (code: number, value: number) =>
+    concat(u16le(code), u16le(4), u32le(1), u32le(value))
+
+  /** count, entries, then the offset of the directory that follows */
+  const directory = (entries: Uint8Array[], next: number) =>
+    concat(u16le(entries.length), ...entries, u32le(next))
+
+  const ENTRY = 12
+  const NEXT_POINTER = 4
+  const ENTRY_COUNT = 2
+
+  /**
+   * Reading past a directory resumes in twelve byte steps from the end of its
+   * entries, swallowing the four byte pointer to the next directory on the
+   * way. Both fixtures below pad what follows onto that step: landing on it is
+   * what turns the overrun into a wrong answer rather than harmless noise.
+   */
+  const padding = (consumed: number) => new Uint8Array(ENTRY - consumed)
+
+  const tiffHeader = concat(ascii('II'), u16le(42), u32le(8))
+
+  it('reads the first page of a multi-page file', () => {
+    const pages = (width: number, height: number, next: number) =>
+      directory([tag(256, width), tag(257, height), tag(259, 1)], next)
+
+    const second = tiffHeader.length + pages(0, 0, 0).length
+    const input = concat(
+      tiffHeader,
+      pages(2464, 3248, second + padding(NEXT_POINTER + ENTRY_COUNT).length),
+      padding(NEXT_POINTER + ENTRY_COUNT),
+      pages(1232, 1624, 0),
+    )
+
+    assert.deepEqual(imageSize(input), {
+      width: 2464,
+      height: 3248,
+      type: 'tiff',
+      compression: 1,
+    })
+  })
+
+  it('stops at the end of the directory instead of reading on', () => {
+    // Entries that would describe a much larger image, sitting past the point
+    // where the entry count says the directory has ended
+    const input = concat(
+      tiffHeader,
+      directory([tag(256, 400), tag(257, 300)], 0xffff),
+      padding(NEXT_POINTER),
+      tag(256, 9999),
+      tag(257, 9999),
+      new Uint8Array(ENTRY),
+    )
+
+    assert.deepEqual(imageSize(input), {
+      width: 400,
+      height: 300,
+      type: 'tiff',
+    })
+  })
 
   it('throws when the BigTIFF header is malformed', () => {
     const input = concat(bigTiffHeader(4), u64le(0), new Uint8Array(32))

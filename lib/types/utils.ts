@@ -11,64 +11,96 @@ export const toHexString = (input: Uint8Array, start = 0, end = input.length) =>
     .subarray(start, end)
     .reduce((memo, i) => memo + `0${i.toString(16)}`.slice(-2), '')
 
-// A DataView built without an explicit length spans the rest of the underlying
-// ArrayBuffer, which for a pooled Node Buffer is somebody else's data. Passing
-// the length keeps every read inside the slice the caller actually handed over.
-const getView = (input: Uint8Array, offset: number, size: number) => {
+/**
+ * Every read below composes its value from indexed bytes rather than through a
+ * `DataView`. A view has to be built per read, since one spanning the whole
+ * input would reach into the rest of the underlying ArrayBuffer, which for a
+ * pooled Node Buffer is somebody else's data. That allocation dominated the
+ * tag-heavy formats: TIFF spent most of its time on it.
+ */
+const checkBounds = (input: Uint8Array, offset: number, size: number) => {
   if (offset < 0 || offset + size > input.byteLength) {
     throw new TypeError('Truncated input, cannot read past the end of the data')
   }
-  return new DataView(input.buffer, input.byteOffset + offset, size)
 }
 
-export const readInt16LE = (input: Uint8Array, offset = 0) =>
-  getView(input, offset, 2).getInt16(0, true)
+export const readInt16LE = (input: Uint8Array, offset = 0) => {
+  checkBounds(input, offset, 2)
+  // Shifting a 16-bit value up to the sign bit and back down sign-extends it
+  return (((input[offset + 1] << 8) | input[offset]) << 16) >> 16
+}
 
-export const readUInt16BE = (input: Uint8Array, offset = 0) =>
-  getView(input, offset, 2).getUint16(0, false)
+export const readUInt16BE = (input: Uint8Array, offset = 0) => {
+  checkBounds(input, offset, 2)
+  return (input[offset] << 8) | input[offset + 1]
+}
 
-export const readUInt16LE = (input: Uint8Array, offset = 0) =>
-  getView(input, offset, 2).getUint16(0, true)
+export const readUInt16LE = (input: Uint8Array, offset = 0) => {
+  checkBounds(input, offset, 2)
+  return (input[offset + 1] << 8) | input[offset]
+}
 
-// DataView doesn't have 24-bit methods
 export const readUInt24LE = (input: Uint8Array, offset = 0) => {
-  const view = getView(input, offset, 3)
-  return view.getUint16(0, true) + (view.getUint8(2) << 16)
+  checkBounds(input, offset, 3)
+  return (input[offset + 2] << 16) | (input[offset + 1] << 8) | input[offset]
 }
 
-export const readInt32LE = (input: Uint8Array, offset = 0) =>
-  getView(input, offset, 4).getInt32(0, true)
+export const readInt32LE = (input: Uint8Array, offset = 0) => {
+  checkBounds(input, offset, 4)
+  return (
+    (input[offset + 3] << 24) |
+    (input[offset + 2] << 16) |
+    (input[offset + 1] << 8) |
+    input[offset]
+  )
+}
 
-export const readUInt32BE = (input: Uint8Array, offset = 0) =>
-  getView(input, offset, 4).getUint32(0, false)
+// The top byte is added rather than shifted in: `<< 24` would make the result
+// signed, and these four bytes are an unsigned quantity
+export const readUInt32BE = (input: Uint8Array, offset = 0) => {
+  checkBounds(input, offset, 4)
+  return (
+    input[offset] * 0x1000000 +
+    ((input[offset + 1] << 16) | (input[offset + 2] << 8) | input[offset + 3])
+  )
+}
 
-export const readUInt32LE = (input: Uint8Array, offset = 0) =>
-  getView(input, offset, 4).getUint32(0, true)
+export const readUInt32LE = (input: Uint8Array, offset = 0) => {
+  checkBounds(input, offset, 4)
+  return (
+    input[offset + 3] * 0x1000000 +
+    ((input[offset + 2] << 16) | (input[offset + 1] << 8) | input[offset])
+  )
+}
 
 export const readUInt64 = (
   input: Uint8Array,
   offset: number,
   isBigEndian: boolean,
-): bigint => getView(input, offset, 8).getBigUint64(0, !isBigEndian)
+): bigint => {
+  checkBounds(input, offset, 8)
+  const high = isBigEndian
+    ? readUInt32BE(input, offset)
+    : readUInt32LE(input, offset + 4)
+  const low = isBigEndian
+    ? readUInt32BE(input, offset + 4)
+    : readUInt32LE(input, offset)
+  return (BigInt(high) << 32n) | BigInt(low)
+}
 
 // Abstract reading multi-byte unsigned integers
-const methods = {
-  readUInt16BE,
-  readUInt16LE,
-  readUInt32BE,
-  readUInt32LE,
-} as const
-
-type MethodName = keyof typeof methods
 export function readUInt(
   input: Uint8Array,
   bits: 16 | 32,
   offset = 0,
   isBigEndian = false,
 ): number {
-  const endian = isBigEndian ? 'BE' : 'LE'
-  const methodName = `readUInt${bits}${endian}` as MethodName
-  return methods[methodName](input, offset)
+  if (bits === 16) {
+    return isBigEndian
+      ? readUInt16BE(input, offset)
+      : readUInt16LE(input, offset)
+  }
+  return isBigEndian ? readUInt32BE(input, offset) : readUInt32LE(input, offset)
 }
 
 // A box header is a 32-bit size followed by a four-character code. Two sizes

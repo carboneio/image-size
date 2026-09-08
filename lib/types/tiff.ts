@@ -31,15 +31,11 @@ interface TIFFInfo extends ISize {
   compression?: number
 }
 
-// Where the entries of the image-file-directory begin
+// Where the first image-file-directory begins
 function findIFD(input: Uint8Array, { isBigEndian, isBigTiff }: TIFFFormat) {
-  const ifdOffset = isBigTiff
+  return isBigTiff
     ? Number(readUInt64(input, 8, isBigEndian))
     : readUInt(input, 32, 4, isBigEndian)
-  const entryCountSize = isBigTiff
-    ? CONSTANTS.COUNT_SIZE.BIG
-    : CONSTANTS.COUNT_SIZE.STANDARD
-  return ifdOffset + entryCountSize
 }
 
 function readTagValue(
@@ -73,7 +69,7 @@ interface TIFFTags {
 
 function extractTags(
   input: Uint8Array,
-  start: number,
+  ifdOffset: number,
   { isBigEndian, isBigTiff }: TIFFFormat,
 ): TIFFTags {
   const tags: TIFFTags = {}
@@ -82,13 +78,24 @@ function extractTags(
     : CONSTANTS.ENTRY_SIZE.STANDARD
   const valueOffset = isBigTiff ? 12 : 8
 
+  // A directory says how many entries it holds. Reading on until a zero tag
+  // or the end of the file instead ran into whatever came next, so the last
+  // page of a multi-page file overwrote the dimensions of the first.
+  const declared = isBigTiff
+    ? Number(readUInt64(input, ifdOffset, isBigEndian))
+    : readUInt(input, 16, ifdOffset, isBigEndian)
+
+  const start =
+    ifdOffset +
+    (isBigTiff ? CONSTANTS.COUNT_SIZE.BIG : CONSTANTS.COUNT_SIZE.STANDARD)
+  const carried = Math.floor((input.length - start) / entrySize)
+  const count = Math.min(declared, Math.max(carried, 0))
+
   // Walking by index rather than reslicing the remainder on every entry: a
   // file whose tag list never terminates used to cost quadratic time
-  let offset = start
-  while (offset + entrySize <= input.length) {
+  for (let entry = 0; entry < count; entry++) {
+    const offset = start + entry * entrySize
     const code = readUInt(input, 16, offset, isBigEndian)
-    if (code === 0) break
-
     const type = readUInt(input, 16, offset + 2, isBigEndian)
     const length = isBigTiff
       ? Number(readUInt64(input, offset + 4, isBigEndian))
@@ -102,8 +109,6 @@ function extractTags(
     ) {
       tags[code] = readTagValue(input, type, offset + valueOffset, isBigEndian)
     }
-
-    offset += entrySize
   }
 
   return tags

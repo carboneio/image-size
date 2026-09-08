@@ -17,9 +17,13 @@ const LITTLE_ENDIAN_BYTE_ALIGN = '4949'
 const IDF_ENTRY_BYTES = 12
 const NUM_DIRECTORY_ENTRIES_BYTES = 2
 
-// 0xFFC0 is baseline standard (SOF), 0xFFC1 baseline optimized (SOF),
-// 0xFFC2 progressive (SOF2)
-const SOF_MARKERS = new Set([0xc0, 0xc1, 0xc2])
+// Every start-of-frame marker. They fill the 0xFFC0..0xFFCF range apart from
+// three that carry no frame header: 0xFFC4 (Huffman tables), 0xFFC8 (reserved)
+// and 0xFFCC (arithmetic coding conditioning). Knowing only the first three
+// left a lossless or arithmetic-coded file looking like a corrupt one.
+const SOF_MARKERS = new Set([
+  0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
+])
 
 function isEXIF(input: Uint8Array, segment: number): boolean {
   return toHexString(input, segment + 2, segment + 6) === EXIF_MARKER
