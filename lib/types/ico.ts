@@ -56,7 +56,16 @@ export const ICO: IImage = {
   },
 
   calculate(input) {
-    const nbImages = readUInt16LE(input, 4)
+    // The header is only a claim. A file announcing 65535 entries in 22 bytes
+    // used to produce 65535 entries sized undefined by undefined.
+    const declared = readUInt16LE(input, 4)
+    const carried = Math.floor((input.length - SIZE_HEADER) / SIZE_IMAGE_ENTRY)
+    const nbImages = Math.min(declared, carried)
+
+    if (nbImages === 0) {
+      throw new TypeError('Invalid ICO, no entries found')
+    }
+
     const imageSize = getImageSize(input, 0)
 
     if (nbImages === 1) return imageSize

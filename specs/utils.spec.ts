@@ -1,18 +1,18 @@
-import { describe, it } from 'node:test'
 import * as assert from 'node:assert'
+import { describe, it } from 'node:test'
 import {
-  toUTF8String,
-  toHexString,
+  findBox,
   readInt16LE,
+  readInt32LE,
+  readUInt,
   readUInt16BE,
   readUInt16LE,
   readUInt24LE,
-  readInt32LE,
   readUInt32BE,
   readUInt32LE,
-  readUInt,
-  findBox,
   readUInt64,
+  toHexString,
+  toUTF8String,
 } from '../lib/types/utils'
 
 describe('Utils', () => {
@@ -130,6 +130,7 @@ describe('Utils', () => {
       assert.deepEqual(result, {
         name: 'test',
         offset: 0,
+        headerSize: 8,
         size: 8,
       })
     })
@@ -146,15 +147,20 @@ describe('Utils', () => {
       assert.equal(result, undefined)
     })
 
-    it('should handle box size larger than remaining input', () => {
-      // Create a box with size larger than the actual data
-      // First 4 bytes indicate a size of 100, but array is only 8 bytes long
+    it('should clamp a box that declares more bytes than the input holds', () => {
+      // A box announcing 100 bytes, in an input that only carries 8 of them.
+      // Cropped files stay readable, so the box is reported at its real extent
       const boxSize = new Uint8Array([0, 0, 0, 100]) // Size of 100 bytes
       const boxName = new Uint8Array([116, 101, 115, 116]) // "test"
       const input = new Uint8Array([...boxSize, ...boxName])
 
       const result = findBox(input, 'test', 0)
-      assert.equal(result, undefined)
+      assert.deepEqual(result, {
+        name: 'test',
+        offset: 0,
+        headerSize: 8,
+        size: 8,
+      })
     })
   })
 })

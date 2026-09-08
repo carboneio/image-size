@@ -8,30 +8,25 @@ const pngImageHeaderChunkName = 'IHDR'
 const pngFriedChunkName = 'CgBI'
 
 export const PNG: IImage = {
-  validate(input) {
-    if (pngSignature === toUTF8String(input, 1, 8)) {
-      let chunkName = toUTF8String(input, 12, 16)
-      if (chunkName === pngFriedChunkName) {
-        chunkName = toUTF8String(input, 28, 32)
-      }
-      if (chunkName !== pngImageHeaderChunkName) {
-        throw new TypeError('Invalid PNG')
-      }
-      return true
-    }
-    return false
-  },
+  // The signature answers "is this a PNG?". Whether the file is a sound one
+  // is for calculate to report, so that detection cannot be derailed by it.
+  validate: (input) => pngSignature === toUTF8String(input, 1, 8),
 
   calculate(input) {
-    if (toUTF8String(input, 12, 16) === pngFriedChunkName) {
-      return {
-        height: readUInt32BE(input, 36),
-        width: readUInt32BE(input, 32),
-      }
+    const isFried = toUTF8String(input, 12, 16) === pngFriedChunkName
+    const headerChunk = isFried ? 28 : 12
+
+    if (
+      toUTF8String(input, headerChunk, headerChunk + 4) !==
+      pngImageHeaderChunkName
+    ) {
+      throw new TypeError('Invalid PNG')
     }
+
+    const dimensions = headerChunk + 4
     return {
-      height: readUInt32BE(input, 20),
-      width: readUInt32BE(input, 16),
+      height: readUInt32BE(input, dimensions + 4),
+      width: readUInt32BE(input, dimensions),
     }
   },
 }

@@ -6,7 +6,12 @@ import { findBox, toUTF8String } from './utils'
 function extractCodestream(input: Uint8Array): Uint8Array | undefined {
   const jxlcBox = findBox(input, 'jxlc', 0)
   if (jxlcBox) {
-    return input.slice(jxlcBox.offset + 8, jxlcBox.offset + jxlcBox.size)
+    // The stream parser only reads the first few bytes of the header, so a
+    // view is enough where a copy would duplicate the whole image
+    return input.subarray(
+      jxlcBox.offset + jxlcBox.headerSize,
+      jxlcBox.offset + jxlcBox.size,
+    )
   }
 
   const partialStreams = extractPartialStreams(input)
@@ -24,8 +29,12 @@ function extractPartialStreams(input: Uint8Array): Uint8Array[] {
   while (offset < input.length) {
     const jxlpBox = findBox(input, 'jxlp', offset)
     if (!jxlpBox) break
+    // A `jxlp` payload opens with a four byte sequence number
     partialStreams.push(
-      input.slice(jxlpBox.offset + 12, jxlpBox.offset + jxlpBox.size),
+      input.subarray(
+        jxlpBox.offset + jxlpBox.headerSize + 4,
+        jxlpBox.offset + jxlpBox.size,
+      ),
     )
     offset = jxlpBox.offset + jxlpBox.size
   }
@@ -55,13 +64,16 @@ export const JXL: IImage = {
     const ftypBox = findBox(input, 'ftyp', 0)
     if (!ftypBox) return false
 
-    const brand = toUTF8String(input, ftypBox.offset + 8, ftypBox.offset + 12)
+    const brandOffset = ftypBox.offset + ftypBox.headerSize
+    const brand = toUTF8String(input, brandOffset, brandOffset + 4)
     return brand === 'jxl '
   },
 
   calculate(input: Uint8Array): ISize {
     const codestream = extractCodestream(input)
-    if (codestream) return JXLStream.calculate(codestream)
-    throw new Error('No codestream found in JXL container')
+    // An empty codestream is as useless as a missing one, and letting it
+    // through only pushes the failure down into the bit reader
+    if (codestream?.length) return JXLStream.calculate(codestream)
+    throw new TypeError('No codestream found in JXL container')
   },
 }

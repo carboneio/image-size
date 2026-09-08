@@ -16,40 +16,56 @@ type Job = {
 
 // This queue is for async `fs` operations, to avoid reaching file-descriptor limits
 const queue: Job[] = []
+let inFlight = 0
 
 let concurrency = 100
 export const setConcurrency = (c: number): void => {
   concurrency = c
+  pump()
 }
 
-const processQueue = async () => {
-  const jobs = queue.splice(0, concurrency)
-  const promises = jobs.map(async ({ filePath, resolve, reject }) => {
-    let handle: fs.promises.FileHandle
-    try {
-      handle = await fs.promises.open(path.resolve(filePath), 'r')
-    } catch (err) {
-      return reject(err as Error)
+const runJob = async ({ filePath, resolve, reject }: Job) => {
+  let handle: fs.promises.FileHandle
+  try {
+    handle = await fs.promises.open(path.resolve(filePath), 'r')
+  } catch (err) {
+    return reject(err as Error)
+  }
+  try {
+    const { size } = await handle.stat()
+    if (size <= 0) {
+      throw new TypeError('Empty file')
     }
-    try {
-      const { size } = await handle.stat()
-      if (size <= 0) {
-        throw new Error('Empty file')
-      }
-      const inputSize = Math.min(size, MaxInputSize)
-      const input = new Uint8Array(inputSize)
-      await handle.read(input, 0, inputSize, 0)
-      resolve(imageSize(input))
-    } catch (err) {
-      reject(err as Error)
-    } finally {
-      await handle.close()
+    const inputSize = Math.min(size, MaxInputSize)
+    const input = new Uint8Array(inputSize)
+    // A read is allowed to come back short. Parsing the whole buffer would
+    // feed the parsers zeros that were never in the file.
+    const { bytesRead } = await handle.read(input, 0, inputSize, 0)
+    resolve(imageSize(input.subarray(0, bytesRead)))
+  } catch (err) {
+    reject(err as Error)
+  } finally {
+    await handle.close()
+  }
+}
+
+/**
+ * Starts as many queued jobs as the budget allows, and one more each time a
+ * job finishes. Counting what is in flight is what makes the budget real: a
+ * queue that is drained by whoever fills it only ever limits a single caller.
+ */
+function pump(): void {
+  while (inFlight < concurrency && queue.length > 0) {
+    const job = queue.shift() as Job
+    inFlight += 1
+
+    // Free the slot whether the job succeeded or not, as `allSettled` did
+    const release = () => {
+      inFlight -= 1
+      pump()
     }
-  })
-
-  await Promise.allSettled(promises)
-
-  if (queue.length) setTimeout(processQueue, 100)
+    runJob(job).then(release, release)
+  }
 }
 
 /**
@@ -58,5 +74,5 @@ const processQueue = async () => {
 export const imageSizeFromFile = async (filePath: string) =>
   new Promise<ISizeCalculationResult>((resolve, reject) => {
     queue.push({ filePath, resolve, reject })
-    processQueue()
+    pump()
   })

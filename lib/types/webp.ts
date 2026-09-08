@@ -50,14 +50,14 @@ export const WEBP: IImage = {
       throw new TypeError('Invalid WebP')
     }
 
-    // Lossless webp stream signature
-    if (chunkHeader === 'VP8 ' && input[0] !== 0x2f) {
+    // Lossy webp stream: the frame tag is followed by the VP8 start code, and
+    // without it the bytes where the dimensions should be mean nothing
+    if (chunkHeader === 'VP8 ' && toHexString(input, 3, 6) === '9d012a') {
       return calculateLossy(input)
     }
 
-    // Lossy webp stream signature
-    const signature = toHexString(input, 3, 6)
-    if (chunkHeader === 'VP8L' && signature !== '9d012a') {
+    // Lossless webp stream: a one byte signature opens the stream
+    if (chunkHeader === 'VP8L' && input[0] === 0x2f) {
       return calculateLossless(input)
     }
 

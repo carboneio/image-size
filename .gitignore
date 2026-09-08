@@ -1,11 +1,8 @@
 .DS_Store
 coverage/
 node_modules
-yarn-debug.log
-yarn-error.log
+npm-debug.log*
 .nyc_output
 dist/
 docs/
-.yarn/*.gz
-.yarn/cache
 *.tgz

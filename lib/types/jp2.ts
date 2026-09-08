@@ -9,17 +9,20 @@ export const JP2: IImage = {
     const ftypBox = findBox(input, 'ftyp', 0)
     if (!ftypBox) return false
 
-    const brand = toUTF8String(input, ftypBox.offset + 8, ftypBox.offset + 12)
+    const brandOffset = ftypBox.offset + ftypBox.headerSize
+    const brand = toUTF8String(input, brandOffset, brandOffset + 4)
     return brand === 'jp2 '
   },
 
   calculate(input) {
     const jp2hBox = findBox(input, 'jp2h', 0)
-    const ihdrBox = jp2hBox && findBox(input, 'ihdr', jp2hBox.offset + 8)
+    const ihdrBox =
+      jp2hBox && findBox(input, 'ihdr', jp2hBox.offset + jp2hBox.headerSize)
     if (ihdrBox) {
+      const sizeOffset = ihdrBox.offset + ihdrBox.headerSize
       return {
-        height: readUInt32BE(input, ihdrBox.offset + 8),
-        width: readUInt32BE(input, ihdrBox.offset + 12),
+        height: readUInt32BE(input, sizeOffset),
+        width: readUInt32BE(input, sizeOffset + 4),
       }
     }
     throw new TypeError('Unsupported JPEG 2000 format')
