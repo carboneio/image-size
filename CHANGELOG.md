@@ -7,10 +7,14 @@ All notable changes to this project are documented in this file.
 A security release. Two published denial-of-service advisories are closed,
 between them covering three parsers, along with seven further problems found
 while auditing the others, and the library no longer hands back dimensions
-that no image can have.
+that no image can have. Two more wrong answers, in the TIFF and JPEG readers,
+came out of checking every result against
+[sharp](https://github.com/lovell/sharp) over the 501 images in its test
+fixtures; the two libraries now agree on all 496 they can both read.
 
-Removing those pathological scans also made the library about twice as fast on
-valid images. The **Performance** section has the measurements.
+Removing those pathological scans made the library about three and a half
+times faster on valid images. The **Performance** section has the
+measurements.
 
 It is a major version because the hardening is observable: inputs that used to
 come back as `0 x 0`, `NaN x NaN` or a `RangeError` now raise a `TypeError`.
@@ -20,7 +24,8 @@ breaking for code that was relying on the old answers to malformed files. The
 
 Every fix in this release was written test first: a case going through the
 public `imageSize` was added and observed to fail before the parser was
-touched. The proofs live in `specs/security.spec.ts`.
+touched. The proofs live in `specs/security.spec.ts` and
+`specs/malformed.spec.ts`.
 
 ### Security
 
@@ -89,58 +94,81 @@ touched. The proofs live in `specs/security.spec.ts`.
 
 ### Performance
 
-Same payloads, same machine, measured against the compiled `dist/` before and
-after. Each is a single `imageSize` call on a hostile input.
+Every number below compares this release against 2.0.2, the commit this work
+started from, on the same machine and with the same payloads. Each row here is
+a single `imageSize` call on a hostile input.
 
-| Payload                            |    Before |  After | Factor |
-| ---------------------------------- | --------: | -----: | -----: |
-| JPEG, 512KB of unmarked bytes      | 10 850 ms |  20 ms |   543x |
-| HEIF, 4000 image properties (78KB) |  4 052 ms |   4 ms |  1013x |
-| PNM, 512KB of comment lines        |  1 880 ms |  14 ms |   134x |
-| TIFF, 512KB of unterminated tags   |    890 ms |  11 ms |    81x |
-| ICNS, HEIF, JXL with a size of 0   |     never |  23 ms |      — |
+| Payload                            |    Before |   After |  Factor |
+| ---------------------------------- | --------: | ------: | ------: |
+| JPEG, 512KB of unmarked bytes      | 13 950 ms | 1.23 ms | 11 342x |
+| HEIF, 4000 image properties (78KB) |  2 339 ms | 0.50 ms |  4 678x |
+| TIFF, 512KB of unterminated tags   |  1 167 ms | 0.44 ms |  2 652x |
+| PNM, 512KB of comment lines        |  1 914 ms | 13.6 ms |    141x |
+| ICNS, HEIF, JXL with a size of 0   |     never | 0.03 ms |       — |
 
 Valid images got faster too, which was not the point but is the larger effect.
 Some of those scans were pathological on ordinary files and not only on
-crafted ones, and two parsers were decoding whole files to read a header that
-sits in the first few bytes. `npm run bench`, mean over the thirty formats it
-covers:
+crafted ones, and two parsers were reading whole files to find a header that
+sits in the first few bytes.
 
-| Payload        |     Before |     After | Factor |
-| -------------- | ---------: | --------: | -----: |
-| 512 B, decode  |  1 074 181 | 1 957 321 |   1.8x |
-| 2 MB, decode   |    894 669 | 1 847 301 |   2.1x |
-| 2 MB, per file |      6 203 |     7 911 |   1.3x |
+These come from `npm run bench`, which builds a valid 1920x1080 image in each
+of the thirty supported formats, padded with pixel data to the size given. A
+*decode* is one `imageSize` call on that image held in memory — nothing is
+really decoded, only the header is read — and *per file* is one
+`imageSizeFromFile`, I/O included. Operations per second, mean over the thirty
+formats:
+
+| Measure               |    Before |     After | Factor |
+| --------------------- | --------: | --------: | -----: |
+| decodes/s, 512 B file | 1 105 014 | 3 891 394 |   3.5x |
+| decodes/s, 2 MB file  |   922 673 | 3 293 873 |   3.6x |
+| files/s, 2 MB file    |     6 848 |     8 848 |   1.3x |
 
 Decodes per second on a 2 MB payload, for the formats that moved most:
 
-| Format     |    Before |     After | Factor |
-| ---------- | --------: | --------: | -----: |
-| ppm        |       174 |   641 273 | 3 686x |
-| pam        |       178 |   517 556 | 2 907x |
-| ppm/ascii  |       429 |   645 703 | 1 505x |
-| jpeg       |     5 054 | 3 111 097 |   615x |
-| tiff       |     1 269 |   673 619 |   531x |
-| svg        |     2 166 |   453 301 |   209x |
-| heif       |   334 344 |   937 295 |   2.8x |
-| png        | 1 139 491 | 3 064 146 |   2.7x |
-| webp lossy |   775 481 | 1 554 753 |   2.0x |
+| Format     |    Before |     After |  Factor |
+| ---------- | --------: | --------: | ------: |
+| pnm        |       176 |   775 445 | 4 406x |
+| pnm/pam    |       179 |   609 858 | 3 407x |
+| pnm/ascii  |       515 |   783 961 | 1 522x |
+| tiff       |     1 302 | 2 404 652 | 1 847x |
+| bigtiff    |     1 277 | 1 422 460 | 1 114x |
+| jpg        |     5 373 | 4 670 237 |   869x |
+| svg        |     2 436 |   535 711 |   220x |
+| avif       |   315 559 | 1 298 583 |   4.1x |
+| png        | 1 280 919 | 4 041 767 |   3.2x |
+| webp lossy |   749 164 | 1 686 248 |   2.3x |
 
-PNM and SVG were the two slowest formats in the benchmark by three orders of
-magnitude, and their cost no longer depends on file size at all: PNM measures a
-2 MB file at 641 273 decodes per second against 660 085 for a 529 byte one.
+Those factors dwarf the 3.6x mean, and the mean is the fairer summary. It
+averages throughput across the thirty formats, so it is carried by the ones
+that were already fast: DDS, PSD, GIF, BMP and ICNS alone held 65% of it. The
+nine formats that gained three orders of magnitude sat below 10 000 decodes
+per second before, 0.05% of the total between them, so multiplying them by a
+thousand barely moves it. The median format gained 3.2x.
 
-The across-the-board gain on small files comes from `toUTF8String` and
-`toHexString`, which copied the byte range before reading it once. Every
-format's `validate` goes through one of the two.
+What the large factors say is not that the library is a thousand times faster,
+but that PNM, SVG and TIFF used to be unusably slow and no longer are. PNM's
+cost no longer depends on file size at all: 775 445 decodes per second on a
+2 MB file against 807 683 on a 529 byte one.
+
+Two changes lift every format at once, since every parser goes through them.
+`toUTF8String` and `toHexString` copied the byte range before reading it, and
+each format's `validate` calls one of the two. Integer reads allocated a
+`DataView` apiece — one shared view is not an option, as it would reach past
+the image into the rest of the `ArrayBuffer` — where reading the bytes by
+index keeps the bounds check and allocates nothing. This second change is
+worth 8.1x on its own for a tag-heavy TIFF, which is why TIFF and BigTIFF sit
+in the table above next to parsers that had an algorithmic fault. The new
+readers were checked against `DataView` over 2.2 million random reads at
+random offsets.
 
 Two more copies are gone that the benchmark's fixtures do not exercise, since
 neither shape appears in them:
 
 | Payload                          |  Before |   After | Factor |
 | -------------------------------- | ------: | ------: | -----: |
-| JXL container, 32 MB codestream  | 2.25 ms | 0.01 ms |   250x |
-| JPEG APP1 EXIF, 5000 IFD entries | 1.22 ms | 0.34 ms |   3.6x |
+| JXL container, 32 MB codestream  | 2.34 ms | 0.01 ms |   234x |
+| JPEG APP1 EXIF, 5000 IFD entries | 1.04 ms | 0.11 ms |   9.5x |
 
 The JXL container was copied whole so that nine bytes of header could be read
 from its start. The EXIF walk copied the APP1 segment, up to 64 KB, and then
@@ -165,6 +193,16 @@ each twelve byte entry out of that copy.
   middle of that size field, and so was reported as an unsupported file type.
 - A lossless WebP whose packed dimension bits happen to spell the lossy start
   code, `9d 01 2a`, is measured instead of rejected.
+- A multi-page TIFF reports its first page instead of its last. A directory
+  says how many entries it holds and the reader ignored that count, walking on
+  until a zero tag or the end of the file. A two page fax crossed 3569 entries
+  where the directory declared 17, ran into the second directory, and let its
+  dimensions overwrite the first one's. Any bytes that looked like a width tag
+  could do the same.
+- A lossless or arithmetic-coded JPEG is measured instead of rejected as
+  corrupt. Only `FF C0`, `FF C1` and `FF C2` counted as frame headers, where
+  the start-of-frame markers fill the `FF C0`..`FF CF` range apart from three
+  that carry no frame (`FF C4`, `FF C8`, `FF CC`).
 - `imageSizeFromFile` no longer parses bytes a short read never delivered. It
   ignored the `bytesRead` it was given, so a partial read on a network or FUSE
   filesystem left the rest of the buffer at zero and the parsers were handed

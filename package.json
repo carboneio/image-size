@@ -1,7 +1,10 @@
 {
-  "name": "image-size",
+  "name": "@carboneio/image-size",
   "version": "3.0.0",
   "description": "get dimensions of any image file",
+  "publishConfig": {
+    "access": "public"
+  },
   "main": "./dist/index.cjs",
   "module": "./dist/index.mjs",
   "types": "./dist/index.d.ts",
@@ -45,7 +48,9 @@
   "engines": {
     "node": ">=16.x"
   },
-  "bin": "bin/image-size.js",
+  "bin": {
+    "image-size": "bin/image-size.js"
+  },
   "scripts": {
     "lint": "biome check lib specs",
     "format": "biome format --write lib specs",
@@ -83,8 +88,10 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git://github.com/image-size/image-size.git"
+    "url": "git+https://github.com/carboneio/image-size.git"
   },
+  "homepage": "https://github.com/carboneio/image-size#readme",
+  "bugs": "https://github.com/carboneio/image-size/issues",
   "author": "netroy <aditya@netroy.in> (http://netroy.in/)",
   "license": "MIT",
   "devDependencies": {
@@ -92,7 +99,7 @@
     "@types/glob": "8.1.0",
     "@types/node": "18.19.39",
     "c8": "10.1.3",
-    "glob": "10.4.2",
+    "glob": "13.0.6",
     "ts-node": "10.9.2",
     "tsup": "8.3.5",
     "typedoc": "0.25.13",
