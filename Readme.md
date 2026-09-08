@@ -1,5 +1,7 @@
 # @carboneio/image-size
 
+Fast, lightweight NodeJS package to get dimensions of any image file or buffer.
+
 ## Forked by [Carbone](https://carbone.io)
 
 [![Build and test](https://github.com/carboneio/image-size/actions/workflows/build-test.yml/badge.svg?branch=main)](https://github.com/carboneio/image-size/actions/workflows/build-test.yml)
@@ -16,7 +18,6 @@ We would like to warmly thank the original developer of this library for their e
 
 Please note that we will maintain this project as long as it remains relevant to our needs, but cannot guarantee support for issues outside our own roadmap.
 
-Fast, lightweight NodeJS package to get dimensions of any image file or buffer.
 
 ## Key Features
 
