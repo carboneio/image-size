@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 416" width="580" height="416" role="img" aria-labelledby="chartTitle chartDesc" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <title id="chartTitle">Speedup over image-size 2.0.2</title>
+  <desc id="chartDesc">Decodes per second on a 2 MB file, per format, on a logarithmic scale. PNM 4406x, PNM/PAM 3407x, TIFF 1847x, PNM/ascii 1522x, BigTIFF 1114x, JPG 869x, SVG 220x, AVIF 4.1x, PNG 3.2x, WebP lossy 2.3x.</desc>
+
+  <text x="0" y="20" font-size="14" font-weight="600" fill="#8b949e">Speedup over image-size 2.0.2</text>
+  <text x="0" y="38" font-size="11" fill="#8b949e">Decodes per second on a 2 MB file, per format &#8212; logarithmic scale</text>
+
+  <rect x="0" y="54" width="10" height="10" rx="2" fill="#2f81f7"/>
+  <text x="16" y="63" font-size="10.5" fill="#8b949e">algorithmic fault fixed</text>
+  <rect x="158" y="54" width="10" height="10" rx="2" fill="#3fb950"/>
+  <text x="174" y="63" font-size="10.5" fill="#8b949e">shared reader gains</text>
+
+  <g stroke="#8b949e" stroke-opacity="0.2">
+    <line x1="120" y1="84" x2="120" y2="350"/>
+    <line x1="220" y1="84" x2="220" y2="350"/>
+    <line x1="320" y1="84" x2="320" y2="350"/>
+    <line x1="420" y1="84" x2="420" y2="350"/>
+    <line x1="520" y1="84" x2="520" y2="350"/>
+  </g>
+
+  <g font-size="11" fill="#8b949e" text-anchor="end">
+    <text x="110" y="104">pnm</text>
+    <text x="110" y="130">pnm/pam</text>
+    <text x="110" y="156">tiff</text>
+    <text x="110" y="182">pnm/ascii</text>
+    <text x="110" y="208">bigtiff</text>
+    <text x="110" y="234">jpg</text>
+    <text x="110" y="260">svg</text>
+    <text x="110" y="286">avif</text>
+    <text x="110" y="312">png</text>
+    <text x="110" y="338">webp lossy</text>
+  </g>
+
+  <g fill="#2f81f7">
+    <rect x="120" y="92" width="364.4" height="16" rx="2"/>
+    <rect x="120" y="118" width="353.2" height="16" rx="2"/>
+    <rect x="120" y="144" width="326.6" height="16" rx="2"/>
+    <rect x="120" y="170" width="318.2" height="16" rx="2"/>
+    <rect x="120" y="196" width="304.7" height="16" rx="2"/>
+    <rect x="120" y="222" width="293.9" height="16" rx="2"/>
+    <rect x="120" y="248" width="234.2" height="16" rx="2"/>
+  </g>
+  <g fill="#3fb950">
+    <rect x="120" y="274" width="61.3" height="16" rx="2"/>
+    <rect x="120" y="300" width="50.5" height="16" rx="2"/>
+    <rect x="120" y="326" width="36.2" height="16" rx="2"/>
+  </g>
+
+  <g font-size="11" font-weight="600" fill="#8b949e">
+    <text x="492" y="104">4406x</text>
+    <text x="481" y="130">3407x</text>
+    <text x="455" y="156">1847x</text>
+    <text x="446" y="182">1522x</text>
+    <text x="433" y="208">1114x</text>
+    <text x="422" y="234">869x</text>
+    <text x="362" y="260">220x</text>
+    <text x="189" y="286">4.1x</text>
+    <text x="179" y="312">3.2x</text>
+    <text x="164" y="338">2.3x</text>
+  </g>
+
+  <line x1="120" y1="350" x2="520" y2="350" stroke="#8b949e" stroke-opacity="0.4"/>
+  <g font-size="10" fill="#8b949e" text-anchor="middle">
+    <text x="120" y="364">1x</text>
+    <text x="220" y="364">10x</text>
+    <text x="320" y="364">100x</text>
+    <text x="420" y="364">1000x</text>
+    <text x="520" y="364">10000x</text>
+  </g>
+
+  <text x="0" y="390" font-size="10.5" fill="#8b949e">Across all thirty supported formats the mean gain is 3.6x and the median format gains 3.2x.</text>
+  <text x="0" y="406" font-size="10.5" fill="#8b949e">On inputs crafted to be slow, previously quadratic: JPEG 11342x, HEIF 4678x, TIFF 2652x.</text>
+</svg>

@@ -14,9 +14,9 @@ After a thorough security audit (pentest) of our dependencies, we decided to for
 
 We started by ensuring the test suite had 100% code coverage before making any changes. We also compared our results and [performance](#performance) with the tests from [sharp](https://github.com/lovell/sharp), a widely used, more general-purpose library.  
 
-We would like to warmly thank the original developer of this library for their excellent work. We are maintaining this fork only because we needed to apply some urgent fixes and improvements; as soon as the original project incorporates these corrections, we will be very happy to remove this fork and return to the main repository.
+[![Speedup over image-size 2.0.2, per format, on a logarithmic scale](assets/performance.svg)](CHANGELOG.md)
 
-Please note that we will maintain this project as long as it remains relevant to our needs, but cannot guarantee support for issues outside our own roadmap.
+We would like to warmly thank the original developer of this library for their excellent work. We are maintaining this fork only because we needed to apply some urgent fixes and improvements; as soon as the original project incorporates these corrections, we will be very happy to remove this fork and return to the main repository.
 
 
 ## Key Features
