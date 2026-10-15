@@ -2,6 +2,14 @@
 
 All notable changes to this project are documented in this file.
 
+## [3.0.1] - 2026-10-15
+
+Build tooling only, nothing changes for users. `tsup` 8.3.5 to 8.5.1 with
+`esbuild` overridden to 0.28.1 or later, which clears two advisories against a
+development server this package never runs and never ships. The only trace in
+the output is the CommonJS bundle requiring `node:fs` where it used to require
+`fs`, matching what the ESM bundle already did.
+
 ## [3.0.0] - 2026-09-07
 
 A security release. Two published denial-of-service advisories are closed,
